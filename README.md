@@ -10,6 +10,7 @@ Fast local hybrid search engine combining semantic and keyword search for macOS.
 - **100% local**: No external APIs or cloud services.
 - **Private**: All data stays on your machine.
 - **Simple**: CLI and HTTP API.
+- **Directory monitoring**: Watch directories for file changes; auto-index on create/modify, remove from index on delete.
 
 ## Installation
 
@@ -85,11 +86,32 @@ curl -X POST http://localhost:8080/api/v1/search \
   -d '{"query": "machine learning", "limit": 10}'
 ```
 
+### Monitor directories
+
+Add directories to watch; files are indexed on create/modify and removed from the index when deleted.
+
+```bash
+# Config: add watch.directories in config.yaml
+# Or via CLI (server must be running):
+sagasu watch add /path/to/docs
+sagasu watch list
+sagasu watch remove /path/to/docs
+```
+
+Or via HTTP:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/watch/directories \
+  -H "Content-Type: application/json" \
+  -d '{"path": "/path/to/docs", "sync": true}'
+curl http://localhost:8080/api/v1/watch/directories
+```
+
 ## Configuration
 
 Config file: `/usr/local/etc/sagasu/config.yaml` (or path set with `--config`).
 
-See `config.yaml.example` for server, storage, embedding, and search options (host, port, paths, chunk size, weights, etc.).
+See `config.yaml.example` for server, storage, embedding, search, and watch options (host, port, paths, chunk size, weights, watched directories, extensions, etc.).
 
 Restart the server after changing config:
 

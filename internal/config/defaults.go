@@ -48,4 +48,12 @@ func ApplyDefaults(cfg *Config) {
 	if cfg.Search.TopKCandidates == 0 {
 		cfg.Search.TopKCandidates = 100
 	}
+	if cfg.Watch.Extensions == nil {
+		cfg.Watch.Extensions = []string{".txt", ".md", ".rst"}
+	}
+	// Recursive defaults to true when unset (nil).
+	if len(cfg.Watch.Directories) > 0 && cfg.Watch.Recursive == nil {
+		t := true
+		cfg.Watch.Recursive = &t
+	}
 }

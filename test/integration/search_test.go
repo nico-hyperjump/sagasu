@@ -3,7 +3,6 @@ package integration
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"testing"
 

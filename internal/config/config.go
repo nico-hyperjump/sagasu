@@ -15,6 +15,22 @@ type Config struct {
 	Storage  StorageConfig  `yaml:"storage"`
 	Embedding EmbeddingConfig `yaml:"embedding"`
 	Search   SearchConfig   `yaml:"search"`
+	Watch    WatchConfig    `yaml:"watch"`
+}
+
+// WatchConfig holds directory watch settings.
+type WatchConfig struct {
+	Directories []string `yaml:"directories"`
+	Extensions  []string `yaml:"extensions"`
+	Recursive   *bool    `yaml:"recursive"`
+}
+
+// Recursive returns whether to watch recursively; defaults to true when unset.
+func (w *WatchConfig) RecursiveOrDefault() bool {
+	if w.Recursive != nil {
+		return *w.Recursive
+	}
+	return true
 }
 
 // ServerConfig holds HTTP server settings.
@@ -69,8 +85,23 @@ func Load(path string) (*Config, error) {
 	cfg.Storage.BleveIndexPath = expandPath(cfg.Storage.BleveIndexPath)
 	cfg.Storage.FAISSIndexPath = expandPath(cfg.Storage.FAISSIndexPath)
 	cfg.Embedding.ModelPath = expandPath(cfg.Embedding.ModelPath)
+	for i := range cfg.Watch.Directories {
+		cfg.Watch.Directories[i] = expandPath(cfg.Watch.Directories[i])
+	}
 
 	return &cfg, nil
+}
+
+// Save writes the config to path. Used for persisting watch directory add/remove.
+func Save(path string, cfg *Config) error {
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+	return nil
 }
 
 // expandPath converts a path to absolute using the home directory if it is not already absolute.

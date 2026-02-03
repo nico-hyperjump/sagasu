@@ -43,4 +43,60 @@ func TestApplyDefaults(t *testing.T) {
 	if cfg.Search.DefaultLimit != 10 {
 		t.Errorf("default limit: got %d", cfg.Search.DefaultLimit)
 	}
+	if cfg.Watch.Extensions == nil {
+		t.Error("watch extensions should be set by default")
+	}
+	if len(cfg.Watch.Extensions) != 3 || cfg.Watch.Extensions[0] != ".txt" {
+		t.Errorf("watch extensions: got %v", cfg.Watch.Extensions)
+	}
+}
+
+func TestApplyDefaults_WatchRecursiveWhenDirectoriesSet(t *testing.T) {
+	cfg := &Config{Watch: WatchConfig{Directories: []string{"/tmp/docs"}}}
+	ApplyDefaults(cfg)
+	if cfg.Watch.Recursive == nil || !*cfg.Watch.Recursive {
+		t.Error("recursive should default to true when directories are set")
+	}
+}
+
+func TestWatchConfig_RecursiveOrDefault(t *testing.T) {
+	t.Run("nil_returns_true", func(t *testing.T) {
+		w := &WatchConfig{}
+		if got := w.RecursiveOrDefault(); !got {
+			t.Errorf("RecursiveOrDefault() = %v, want true", got)
+		}
+	})
+	t.Run("true_returns_true", func(t *testing.T) {
+		v := true
+		w := &WatchConfig{Recursive: &v}
+		if got := w.RecursiveOrDefault(); !got {
+			t.Errorf("RecursiveOrDefault() = %v, want true", got)
+		}
+	})
+	t.Run("false_returns_false", func(t *testing.T) {
+		f := false
+		w := &WatchConfig{Recursive: &f}
+		if got := w.RecursiveOrDefault(); got {
+			t.Errorf("RecursiveOrDefault() = %v, want false", got)
+		}
+	})
+}
+
+func TestSave(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "saved.yaml")
+	cfg := &Config{
+		Server:  ServerConfig{Host: "localhost", Port: 9090},
+		Storage: StorageConfig{DatabasePath: "/tmp/db"},
+	}
+	if err := Save(path, cfg); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Server.Port != 9090 {
+		t.Errorf("loaded port: got %d", loaded.Server.Port)
+	}
 }

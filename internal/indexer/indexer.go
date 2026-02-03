@@ -4,10 +4,14 @@ package indexer
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/hyperjump/sagasu/internal/config"
 	"github.com/hyperjump/sagasu/internal/embedding"
+	"github.com/hyperjump/sagasu/internal/fileid"
 	"github.com/hyperjump/sagasu/internal/keyword"
 	"github.com/hyperjump/sagasu/internal/models"
 	"github.com/hyperjump/sagasu/internal/storage"
@@ -90,6 +94,51 @@ func (idx *Indexer) IndexDocument(ctx context.Context, input *models.DocumentInp
 		return fmt.Errorf("failed to index keywords: %w", err)
 	}
 	return nil
+}
+
+// IndexFile reads a file from path and indexes it. The document ID is derived from the
+// absolute path so re-indexing updates the same document. If allowedExts is non-nil and
+// non-empty, the file's extension must be in the list (case-insensitive). Returns an error
+// if the path is not a regular file, cannot be read, or indexing fails.
+func (idx *Indexer) IndexFile(ctx context.Context, path string, allowedExts []string) error {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("absolute path: %w", err)
+	}
+	ext := strings.ToLower(filepath.Ext(absPath))
+	if len(allowedExts) > 0 && !extensionAllowed(ext, allowedExts) {
+		return fmt.Errorf("extension %q not in allowed list", ext)
+	}
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return fmt.Errorf("stat file: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("not a regular file: %s", absPath)
+	}
+	content, err := os.ReadFile(absPath)
+	if err != nil {
+		return fmt.Errorf("read file: %w", err)
+	}
+	docID := fileid.FileDocID(absPath)
+	_ = idx.DeleteDocument(ctx, docID)
+	input := &models.DocumentInput{
+		ID:       docID,
+		Title:    filepath.Base(absPath),
+		Content:  string(content),
+		Metadata: map[string]interface{}{"source_path": absPath},
+	}
+	return idx.IndexDocument(ctx, input)
+}
+
+func extensionAllowed(ext string, allowed []string) bool {
+	extNorm := strings.ToLower(strings.TrimPrefix(ext, "."))
+	for _, a := range allowed {
+		if strings.ToLower(strings.TrimPrefix(a, ".")) == extNorm {
+			return true
+		}
+	}
+	return false
 }
 
 // DeleteDocument removes a document from all indices and storage.

@@ -22,3 +22,9 @@ search:
   chunk_size: 512
   chunk_overlap: 50
   top_k_candidates: 100
+
+# Optional: monitor directories for file changes (index on create/modify, remove from index on delete)
+watch:
+  directories: []   # e.g. ["/path/to/docs", "~/notes"]
+  extensions: [".txt", ".md", ".rst"]
+  recursive: true

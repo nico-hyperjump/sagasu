@@ -92,6 +92,37 @@ sagasu delete doc-123
 
 ---
 
+### watch
+
+Manage watched directories (requires server running).
+
+```bash
+sagasu watch add <path>
+sagasu watch remove <path>
+sagasu watch list
+```
+
+| Subcommand | Description                             |
+| ---------- | --------------------------------------- |
+| add        | Add directory to watch and index files. |
+| remove     | Stop watching directory.                |
+| list       | List watched directories.               |
+
+| Flag     | Default               | Description |
+| -------- | --------------------- | ----------- |
+| --server | http://localhost:8080 | Server URL. |
+
+**Examples:**
+
+```bash
+sagasu watch add /path/to/docs
+sagasu watch add --server http://localhost:9000 ~/notes
+sagasu watch list
+sagasu watch remove /path/to/docs
+```
+
+---
+
 ### version
 
 Print version.

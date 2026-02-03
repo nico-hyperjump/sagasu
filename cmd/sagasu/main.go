@@ -2,17 +2,24 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"github.com/hyperjump/sagasu/internal/cli"
 	"github.com/hyperjump/sagasu/internal/config"
 	"github.com/hyperjump/sagasu/internal/embedding"
+	"github.com/hyperjump/sagasu/internal/fileid"
 	"github.com/hyperjump/sagasu/internal/indexer"
 	"github.com/hyperjump/sagasu/internal/keyword"
 	"github.com/hyperjump/sagasu/internal/models"
@@ -20,6 +27,7 @@ import (
 	"github.com/hyperjump/sagasu/internal/server"
 	"github.com/hyperjump/sagasu/internal/storage"
 	"github.com/hyperjump/sagasu/internal/vector"
+	"github.com/hyperjump/sagasu/internal/watcher"
 	"go.uber.org/zap"
 )
 
@@ -40,6 +48,8 @@ func main() {
 		runIndex()
 	case "delete":
 		runDelete()
+	case "watch":
+		runWatch()
 	case "version", "--version", "-v":
 		fmt.Printf("sagasu version %s\n", version)
 	case "help", "--help", "-h":
@@ -70,12 +80,38 @@ func runServer() {
 	}
 	defer components.Close()
 
+	idx := components.Indexer
+	exts := cfg.Watch.Extensions
+	watchSvc := watcher.NewWatcher(
+		cfg.Watch.Directories,
+		exts,
+		cfg.Watch.RecursiveOrDefault(),
+		func(path string) {
+			if err := idx.IndexFile(context.Background(), path, exts); err != nil {
+				logger.Warn("watch index file failed", zap.String("path", path), zap.Error(err))
+			}
+		},
+		func(path string) {
+			if err := idx.DeleteDocument(context.Background(), fileid.FileDocID(path)); err != nil {
+				logger.Warn("watch delete by path failed", zap.String("path", path), zap.Error(err))
+			}
+		},
+	)
+	watchCtx, watchCancel := context.WithCancel(context.Background())
+	defer watchCancel()
+	if err := watchSvc.Start(watchCtx); err != nil {
+		logger.Fatal("Failed to start watcher", zap.Error(err))
+	}
+
 	srv := server.NewServer(
 		components.Engine,
 		components.Indexer,
 		components.Storage,
 		&cfg.Server,
 		logger,
+		watchSvc,
+		*configPath,
+		cfg,
 	)
 	go func() {
 		if err := srv.Start(); err != nil {
@@ -88,6 +124,7 @@ func runServer() {
 	<-sigChan
 
 	logger.Info("Shutting down...")
+	watchCancel()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_ = srv.Stop(ctx)
@@ -176,6 +213,85 @@ func runIndex() {
 		os.Exit(1)
 	}
 	fmt.Printf("Document indexed successfully: %s\n", input.ID)
+}
+
+func runWatch() {
+	if len(os.Args) < 3 {
+		fmt.Println("Usage: sagasu watch <add|remove|list> [path]")
+		fmt.Println("  sagasu watch add <path>     Add directory to watch")
+		fmt.Println("  sagasu watch remove <path>  Remove directory from watch")
+		fmt.Println("  sagasu watch list           List watched directories")
+		os.Exit(1)
+	}
+	sub := os.Args[2]
+	fs := flag.NewFlagSet("watch", flag.ExitOnError)
+	serverURL := fs.String("server", "http://localhost:8080", "server URL")
+	_ = fs.Parse(os.Args[3:])
+	switch sub {
+	case "add":
+		if fs.NArg() < 1 {
+			fmt.Println("Usage: sagasu watch add <path>")
+			os.Exit(1)
+		}
+		path, _ := filepath.Abs(fs.Arg(0))
+		body, _ := json.Marshal(map[string]interface{}{"path": path, "sync": true})
+		resp, err := http.Post(*serverURL+"/api/v1/watch/directories", "application/json", bytes.NewReader(body))
+		if err != nil {
+			fmt.Printf("Request failed: %v\n", err)
+			os.Exit(1)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusCreated {
+			b, _ := io.ReadAll(resp.Body)
+			fmt.Printf("Add failed (%d): %s\n", resp.StatusCode, string(b))
+			os.Exit(1)
+		}
+		fmt.Printf("Added: %s\n", path)
+	case "remove":
+		if fs.NArg() < 1 {
+			fmt.Println("Usage: sagasu watch remove <path>")
+			os.Exit(1)
+		}
+		path, _ := filepath.Abs(fs.Arg(0))
+		req, _ := http.NewRequest(http.MethodDelete, *serverURL+"/api/v1/watch/directories?path="+url.QueryEscape(path), nil)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			fmt.Printf("Request failed: %v\n", err)
+			os.Exit(1)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			b, _ := io.ReadAll(resp.Body)
+			fmt.Printf("Remove failed (%d): %s\n", resp.StatusCode, string(b))
+			os.Exit(1)
+		}
+		fmt.Printf("Removed: %s\n", path)
+	case "list":
+		resp, err := http.Get(*serverURL + "/api/v1/watch/directories")
+		if err != nil {
+			fmt.Printf("Request failed: %v\n", err)
+			os.Exit(1)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			b, _ := io.ReadAll(resp.Body)
+			fmt.Printf("List failed (%d): %s\n", resp.StatusCode, string(b))
+			os.Exit(1)
+		}
+		var out struct {
+			Directories []string `json:"directories"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+			fmt.Printf("Parse failed: %v\n", err)
+			os.Exit(1)
+		}
+		for _, d := range out.Directories {
+			fmt.Println(d)
+		}
+	default:
+		fmt.Printf("Unknown watch subcommand: %s\n", sub)
+		os.Exit(1)
+	}
 }
 
 func runDelete() {
@@ -284,7 +400,8 @@ Usage:
   sagasu server [flags]           Start the HTTP server
   sagasu search [flags] <query>   Search documents
   sagasu index [flags] <file>     Index a document
-  sagasu delete [flags] <id>      Delete a document
+  sagasu delete [flags] <id>       Delete a document
+  sagasu watch <add|remove|list>  Manage watched directories
   sagasu version                  Show version
   sagasu help                     Show this help
 
@@ -301,11 +418,15 @@ Index Flags:
   --config string    Config file path
   --title string     Document title
 
+Watch Flags:
+  --server string    Server URL (default: http://localhost:8080)
+
 Examples:
   sagasu server
   sagasu search "machine learning algorithms"
   sagasu search --keyword-weight 0.7 --semantic-weight 0.3 "neural networks"
   sagasu index --title "My Document" document.txt
   sagasu delete doc-123
-`)
+  sagasu watch add /path/to/docs
+  sagasu watch list`)
 }
