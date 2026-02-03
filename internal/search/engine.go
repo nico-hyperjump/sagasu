@@ -105,47 +105,74 @@ func (e *Engine) Search(ctx context.Context, query *models.SearchQuery) (*models
 		chunkToDoc[r.ID] = chunk.DocumentID
 	}
 	semanticByDoc := AggregateSemanticByDocument(chunkToDoc, semanticByChunk)
-	fusedResults := Fuse(keywordScores, semanticByDoc, query.KeywordWeight, query.SemanticWeight)
+	nonSemanticFused, semanticFused := SplitBySource(keywordScores, semanticByDoc)
 
 	if query.MinScore > 0 {
-		filtered := fusedResults[:0]
-		for _, r := range fusedResults {
-			if r.Score >= query.MinScore {
-				filtered = append(filtered, r)
-			}
-		}
-		fusedResults = filtered
+		nonSemanticFused = filterByMinScore(nonSemanticFused, query.MinScore)
+		semanticFused = filterByMinScore(semanticFused, query.MinScore)
 	}
 
-	start := query.Offset
-	end := query.Offset + query.Limit
-	if start > len(fusedResults) {
-		start = len(fusedResults)
-	}
-	if end > len(fusedResults) {
-		end = len(fusedResults)
-	}
-	pagedResults := fusedResults[start:end]
+	totalNonSemantic := len(nonSemanticFused)
+	totalSemantic := len(semanticFused)
+	nonSemanticPaged := pageResults(nonSemanticFused, query.Offset, query.Limit)
+	semanticPaged := pageResults(semanticFused, query.Offset, query.Limit)
 
 	response := &models.SearchResponse{
-		Results:   make([]*models.SearchResult, 0, len(pagedResults)),
-		Total:     len(fusedResults),
-		QueryTime: time.Since(startTime).Milliseconds(),
-		Query:     query.Query,
+		NonSemanticResults: make([]*models.SearchResult, 0, len(nonSemanticPaged)),
+		SemanticResults:    make([]*models.SearchResult, 0, len(semanticPaged)),
+		TotalNonSemantic:   totalNonSemantic,
+		TotalSemantic:      totalSemantic,
+		QueryTime:          time.Since(startTime).Milliseconds(),
+		Query:              query.Query,
 	}
 
-	for i, fusedResult := range pagedResults {
-		doc, err := e.storage.GetDocument(ctx, fusedResult.DocumentID)
+	for i, r := range nonSemanticPaged {
+		doc, err := e.storage.GetDocument(ctx, r.DocumentID)
 		if err != nil {
 			continue
 		}
-		response.Results = append(response.Results, &models.SearchResult{
+		response.NonSemanticResults = append(response.NonSemanticResults, &models.SearchResult{
 			Document:      doc,
-			Score:         fusedResult.Score,
-			KeywordScore:  fusedResult.KeywordScore,
-			SemanticScore: fusedResult.SemanticScore,
-			Rank:          start + i + 1,
+			Score:         r.Score,
+			KeywordScore:  r.KeywordScore,
+			SemanticScore: r.SemanticScore,
+			Rank:          i + 1,
+		})
+	}
+	for i, r := range semanticPaged {
+		doc, err := e.storage.GetDocument(ctx, r.DocumentID)
+		if err != nil {
+			continue
+		}
+		response.SemanticResults = append(response.SemanticResults, &models.SearchResult{
+			Document:      doc,
+			Score:         r.Score,
+			KeywordScore:  r.KeywordScore,
+			SemanticScore: r.SemanticScore,
+			Rank:          i + 1,
 		})
 	}
 	return response, nil
+}
+
+func filterByMinScore(results []*FusedResult, minScore float64) []*FusedResult {
+	filtered := results[:0]
+	for _, r := range results {
+		if r.Score >= minScore {
+			filtered = append(filtered, r)
+		}
+	}
+	return filtered
+}
+
+func pageResults(results []*FusedResult, offset, limit int) []*FusedResult {
+	start := offset
+	end := offset + limit
+	if start > len(results) {
+		start = len(results)
+	}
+	if end > len(results) {
+		end = len(results)
+	}
+	return results[start:end]
 }

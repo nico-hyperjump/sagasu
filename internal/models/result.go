@@ -11,9 +11,14 @@ type SearchResult struct {
 }
 
 // SearchResponse is the response for a search request.
+// NonSemanticResults and SemanticResults are disjoint (no document appears in both).
 type SearchResponse struct {
-	Results   []*SearchResult `json:"results"`
-	Total     int             `json:"total"`
-	QueryTime int64           `json:"query_time_ms"`
-	Query     string          `json:"query"`
+	// NonSemanticResults are keyword-only hits (not in semantic set).
+	NonSemanticResults []*SearchResult `json:"non_semantic_results"`
+	// SemanticResults are semantic-only hits (not in keyword set).
+	SemanticResults []*SearchResult `json:"semantic_results"`
+	TotalNonSemantic int             `json:"total_non_semantic"`
+	TotalSemantic    int             `json:"total_semantic"`
+	QueryTime        int64           `json:"query_time_ms"`
+	Query            string          `json:"query"`
 }

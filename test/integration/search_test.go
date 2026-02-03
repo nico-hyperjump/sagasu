@@ -73,7 +73,8 @@ func TestIntegration_Search(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resp.Total < 1 {
-		t.Errorf("expected at least 1 result, got %d", resp.Total)
+	total := resp.TotalNonSemantic + resp.TotalSemantic
+	if total < 1 {
+		t.Errorf("expected at least 1 result, got total_non_semantic=%d total_semantic=%d", resp.TotalNonSemantic, resp.TotalSemantic)
 	}
 }

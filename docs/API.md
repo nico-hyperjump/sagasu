@@ -34,9 +34,11 @@ Run a hybrid (keyword + semantic) search.
 
 **Response (200):**
 
+Results are split into two disjoint lists: `non_semantic_results` (keyword-only) and `semantic_results` (semantic-only). No document appears in both.
+
 ```json
 {
-  "results": [
+  "non_semantic_results": [
     {
       "document": {
         "id": "doc-id",
@@ -46,13 +48,30 @@ Run a hybrid (keyword + semantic) search.
         "created_at": "...",
         "updated_at": "..."
       },
-      "score": 0.85,
+      "score": 0.9,
       "keyword_score": 0.9,
+      "semantic_score": 0,
+      "rank": 1
+    }
+  ],
+  "semantic_results": [
+    {
+      "document": {
+        "id": "doc-id-2",
+        "title": "Another Document",
+        "content": "...",
+        "metadata": {},
+        "created_at": "...",
+        "updated_at": "..."
+      },
+      "score": 0.8,
+      "keyword_score": 0,
       "semantic_score": 0.8,
       "rank": 1
     }
   ],
-  "total": 1,
+  "total_non_semantic": 1,
+  "total_semantic": 1,
   "query_time_ms": 25,
   "query": "machine learning"
 }
