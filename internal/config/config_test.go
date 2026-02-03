@@ -31,6 +31,38 @@ storage:
 	}
 }
 
+func TestLoad_expandPathDotSlashRelativeToConfigDir(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	content := `
+server:
+  host: "localhost"
+  port: 8080
+storage:
+  database_path: "./data/db/documents.db"
+watch:
+  directories: ["./dev/sample"]
+`
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantDB := filepath.Join(dir, "data", "db", "documents.db")
+	if cfg.Storage.DatabasePath != wantDB {
+		t.Errorf("database_path = %s, want %s", cfg.Storage.DatabasePath, wantDB)
+	}
+	if len(cfg.Watch.Directories) != 1 {
+		t.Fatalf("watch directories: got %d", len(cfg.Watch.Directories))
+	}
+	wantWatch := filepath.Join(dir, "dev", "sample")
+	if cfg.Watch.Directories[0] != wantWatch {
+		t.Errorf("watch directory = %s, want %s", cfg.Watch.Directories[0], wantWatch)
+	}
+}
+
 func TestApplyDefaults(t *testing.T) {
 	cfg := &Config{}
 	ApplyDefaults(cfg)

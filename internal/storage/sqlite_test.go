@@ -2,11 +2,33 @@ package storage
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/hyperjump/sagasu/internal/models"
 )
+
+func TestNewSQLiteStorage_createsParentDirectories(t *testing.T) {
+	base := t.TempDir()
+	path := filepath.Join(base, "sub", "nested", "documents.db")
+	// Ensure parent dirs do not exist.
+	_ = os.RemoveAll(filepath.Join(base, "sub"))
+
+	store, err := NewSQLiteStorage(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	if _, err := os.Stat(filepath.Dir(path)); err != nil {
+		t.Errorf("parent directory should exist: %v", err)
+	}
+	ctx := context.Background()
+	if err := store.CreateDocument(ctx, &models.Document{ID: "x", Content: "c", Metadata: nil}); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestSQLiteStorage_CRUD(t *testing.T) {
 	dir := t.TempDir()

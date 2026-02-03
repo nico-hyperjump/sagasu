@@ -25,21 +25,28 @@ Optional:
 
    ```bash
    make build
-   ./scripts/download-model.sh ./data/models
+   ./scripts/download-model.sh ./dev/data/models
    ```
 
-3. Copy the example config and set dev paths (e.g. `embedding.model_path`, `storage.database_path`, `storage.bleve_index_path` to `./data/...`):
+3. Copy the example config and set dev paths (e.g. `embedding.model_path`, `storage.database_path`, `storage.bleve_index_path` to `./dev/data/...`):
 
    ```bash
    cp config.yaml.example config.yaml
-   # Edit config.yaml: set model_path to ./data/models/all-MiniLM-L6-v2.onnx
-   # and storage paths under ./data/
+   # Edit config.yaml: set model_path to ./dev/data/models/all-MiniLM-L6-v2.onnx
+   # and storage paths under ./dev/data/
+   # and watch.directories to ./dev/sample
    ```
 
 4. Run the server:
 
    ```bash
    ./bin/sagasu server --config config.yaml
+   ```
+
+5. Add files to the watched directories (e.g. `./dev/sample`).
+6. Search something by opening a new terminal and running:
+   ```bash
+   ./bin/sagasu search "machine learning algorithms"
    ```
 
 Both keyword and semantic search work. The mock embedder is only a fallback when ONNX is unavailable (e.g. CI, `CGO_ENABLED=0`)—it produces hash-based vectors, so semantic search does not behave meaningfully.

@@ -4,6 +4,7 @@ package watcher
 import (
 	"context"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -215,6 +216,15 @@ func (w *Watcher) AddDirectory(root string, syncExisting bool) error {
 
 func (w *Watcher) addRootLocked(root string) error {
 	root = filepath.Clean(root)
+	if _, err := os.Stat(root); err != nil {
+		if os.IsNotExist(err) {
+			if err := os.MkdirAll(root, 0755); err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
 	var paths []string
 	add := func(path string, d fs.DirEntry) error {
 		if !d.IsDir() {
@@ -300,6 +310,17 @@ func (w *Watcher) Directories() []string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return append([]string(nil), w.roots...)
+}
+
+// SyncExistingFiles indexes all existing files in each watched root that match the configured extensions.
+// Call this after Start() to index files that were already present when the watcher started.
+func (w *Watcher) SyncExistingFiles() {
+	w.mu.Lock()
+	roots := append([]string(nil), w.roots...)
+	w.mu.Unlock()
+	for _, root := range roots {
+		w.syncDirectory(root)
+	}
 }
 
 // Stop stops the watcher and releases resources.

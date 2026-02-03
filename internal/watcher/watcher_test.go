@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -122,6 +123,55 @@ func TestInDir(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("inDir(%q, %q) = %v, want %v", tt.dir, tt.path, got, tt.want)
 		}
+	}
+}
+
+func TestWatcher_SyncExistingFiles_indexesMatchingFiles(t *testing.T) {
+	dir := t.TempDir()
+	if err := writeFile(filepath.Join(dir, "a.txt"), "hello"); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeFile(filepath.Join(dir, "ignore.xyz"), "x"); err != nil {
+		t.Fatal(err)
+	}
+
+	var indexed []string
+	var mu sync.Mutex
+	onIndex := func(path string) {
+		mu.Lock()
+		indexed = append(indexed, path)
+		mu.Unlock()
+	}
+	w := NewWatcher([]string{dir}, []string{".txt"}, true, onIndex, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := w.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	w.SyncExistingFiles()
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(indexed) != 1 || !strings.HasSuffix(indexed[0], "a.txt") {
+		t.Errorf("expected one indexed file a.txt, got %v", indexed)
+	}
+}
+
+func TestWatcher_Start_createsMissingRootDirectory(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "watch", "me")
+	// Ensure the root does not exist.
+	_ = os.RemoveAll(filepath.Join(base, "watch"))
+
+	w := NewWatcher([]string{root}, []string{".txt"}, true, nil, nil)
+	// Use Background so we don't cancel; avoid race with run() reading w.watcher after Stop() nils it.
+	if err := w.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	// Don't call Stop() to avoid race where run() reads w.watcher after Stop() nils it; test exit is enough.
+
+	if _, err := os.Stat(root); err != nil {
+		t.Errorf("root directory should exist after Start: %v", err)
 	}
 }
 

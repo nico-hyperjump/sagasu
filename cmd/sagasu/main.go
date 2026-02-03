@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -32,6 +33,33 @@ import (
 )
 
 var version = "dev"
+
+const defaultConfigPath = "/usr/local/etc/sagasu/config.yaml"
+
+// loadConfig loads config from path. If path is the default and the file does not exist,
+// it tries config.yaml in the current directory (for development).
+// Returns the config and the path that was actually loaded (for saving, etc.).
+func loadConfig(path string) (*config.Config, string, error) {
+	cfg, err := config.Load(path)
+	if err != nil {
+		if path == defaultConfigPath {
+			if unwrap := errors.Unwrap(err); unwrap != nil && os.IsNotExist(unwrap) {
+				if cwd, cwdErr := os.Getwd(); cwdErr == nil {
+					fallback := filepath.Join(cwd, "config.yaml")
+					if _, statErr := os.Stat(fallback); statErr == nil {
+						cfg, loadErr := config.Load(fallback)
+						if loadErr != nil {
+							return nil, "", loadErr
+						}
+						return cfg, fallback, nil
+					}
+				}
+			}
+		}
+		return nil, "", err
+	}
+	return cfg, path, nil
+}
 
 func main() {
 	if len(os.Args) < 2 {
@@ -63,10 +91,10 @@ func main() {
 
 func runServer() {
 	fs := flag.NewFlagSet("server", flag.ExitOnError)
-	configPath := fs.String("config", "/usr/local/etc/sagasu/config.yaml", "config file path")
+	configPath := fs.String("config", defaultConfigPath, "config file path")
 	_ = fs.Parse(os.Args[2:])
 
-	cfg, err := config.Load(*configPath)
+	cfg, resolvedConfigPath, err := loadConfig(*configPath)
 	if err != nil {
 		fmt.Printf("Failed to load config: %v\n", err)
 		os.Exit(1)
@@ -102,6 +130,7 @@ func runServer() {
 	if err := watchSvc.Start(watchCtx); err != nil {
 		logger.Fatal("Failed to start watcher", zap.Error(err))
 	}
+	watchSvc.SyncExistingFiles()
 
 	srv := server.NewServer(
 		components.Engine,
@@ -110,7 +139,7 @@ func runServer() {
 		&cfg.Server,
 		logger,
 		watchSvc,
-		*configPath,
+		resolvedConfigPath,
 		cfg,
 	)
 	go func() {
@@ -132,7 +161,8 @@ func runServer() {
 
 func runSearch() {
 	fs := flag.NewFlagSet("search", flag.ExitOnError)
-	configPath := fs.String("config", "/usr/local/etc/sagasu/config.yaml", "config file path")
+	configPath := fs.String("config", defaultConfigPath, "config file path")
+	serverURL := fs.String("server", "http://localhost:8080", "server URL (empty = use direct storage)")
 	limit := fs.Int("limit", 10, "number of results")
 	kwWeight := fs.Float64("keyword-weight", 0.5, "keyword weight")
 	semWeight := fs.Float64("semantic-weight", 0.5, "semantic weight")
@@ -144,7 +174,26 @@ func runSearch() {
 	}
 	queryStr := fs.Arg(0)
 
-	cfg, err := config.Load(*configPath)
+	searchQuery := &models.SearchQuery{
+		Query:          queryStr,
+		Limit:          *limit,
+		KeywordWeight:  *kwWeight,
+		SemanticWeight: *semWeight,
+	}
+
+	if *serverURL != "" {
+		// Use HTTP API when server is running (avoids Bleve/SQLite lock conflict).
+		response, err := searchViaHTTP(*serverURL, searchQuery)
+		if err != nil {
+			fmt.Printf("Search failed: %v\n", err)
+			os.Exit(1)
+		}
+		cli.PrintSearchResults(response)
+		return
+	}
+
+	// Direct storage access (when server is not running).
+	cfg, _, err := loadConfig(*configPath)
 	if err != nil {
 		fmt.Printf("Failed to load config: %v\n", err)
 		os.Exit(1)
@@ -158,12 +207,6 @@ func runSearch() {
 	}
 	defer components.Close()
 
-	searchQuery := &models.SearchQuery{
-		Query:          queryStr,
-		Limit:          *limit,
-		KeywordWeight:  *kwWeight,
-		SemanticWeight: *semWeight,
-	}
 	response, err := components.Engine.Search(context.Background(), searchQuery)
 	if err != nil {
 		fmt.Printf("Search failed: %v\n", err)
@@ -172,9 +215,30 @@ func runSearch() {
 	cli.PrintSearchResults(response)
 }
 
+func searchViaHTTP(serverURL string, query *models.SearchQuery) (*models.SearchResponse, error) {
+	body, err := json.Marshal(query)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := http.Post(serverURL+"/api/v1/search", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("server returned %d: %s", resp.StatusCode, string(b))
+	}
+	var response models.SearchResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	return &response, nil
+}
+
 func runIndex() {
 	fs := flag.NewFlagSet("index", flag.ExitOnError)
-	configPath := fs.String("config", "/usr/local/etc/sagasu/config.yaml", "config file path")
+	configPath := fs.String("config", defaultConfigPath, "config file path")
 	title := fs.String("title", "", "document title")
 	_ = fs.Parse(os.Args[2:])
 
@@ -190,7 +254,7 @@ func runIndex() {
 		os.Exit(1)
 	}
 
-	cfg, err := config.Load(*configPath)
+	cfg, _, err := loadConfig(*configPath)
 	if err != nil {
 		fmt.Printf("Failed to load config: %v\n", err)
 		os.Exit(1)
@@ -296,7 +360,7 @@ func runWatch() {
 
 func runDelete() {
 	fs := flag.NewFlagSet("delete", flag.ExitOnError)
-	configPath := fs.String("config", "/usr/local/etc/sagasu/config.yaml", "config file path")
+	configPath := fs.String("config", defaultConfigPath, "config file path")
 	_ = fs.Parse(os.Args[2:])
 
 	if fs.NArg() < 1 {
@@ -305,7 +369,7 @@ func runDelete() {
 	}
 	docID := fs.Arg(0)
 
-	cfg, err := config.Load(*configPath)
+	cfg, _, err := loadConfig(*configPath)
 	if err != nil {
 		fmt.Printf("Failed to load config: %v\n", err)
 		os.Exit(1)
@@ -409,7 +473,8 @@ Server Flags:
   --config string    Config file path (default: /usr/local/etc/sagasu/config.yaml)
 
 Search Flags:
-  --config string           Config file path
+  --config string           Config file path (for direct storage mode)
+  --server string           Server URL (default: http://localhost:8080). Use empty to access storage directly.
   --limit int               Number of results (default: 10)
   --keyword-weight float    Keyword weight (default: 0.5)
   --semantic-weight float   Semantic weight (default: 0.5)

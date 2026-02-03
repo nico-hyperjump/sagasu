@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -81,12 +82,13 @@ func Load(path string) (*Config, error) {
 
 	ApplyDefaults(&cfg)
 
-	cfg.Storage.DatabasePath = expandPath(cfg.Storage.DatabasePath)
-	cfg.Storage.BleveIndexPath = expandPath(cfg.Storage.BleveIndexPath)
-	cfg.Storage.FAISSIndexPath = expandPath(cfg.Storage.FAISSIndexPath)
-	cfg.Embedding.ModelPath = expandPath(cfg.Embedding.ModelPath)
+	configDir := filepath.Dir(path)
+	cfg.Storage.DatabasePath = expandPath(cfg.Storage.DatabasePath, configDir)
+	cfg.Storage.BleveIndexPath = expandPath(cfg.Storage.BleveIndexPath, configDir)
+	cfg.Storage.FAISSIndexPath = expandPath(cfg.Storage.FAISSIndexPath, configDir)
+	cfg.Embedding.ModelPath = expandPath(cfg.Embedding.ModelPath, configDir)
 	for i := range cfg.Watch.Directories {
-		cfg.Watch.Directories[i] = expandPath(cfg.Watch.Directories[i])
+		cfg.Watch.Directories[i] = expandPath(cfg.Watch.Directories[i], configDir)
 	}
 
 	return &cfg, nil
@@ -104,10 +106,14 @@ func Save(path string, cfg *Config) error {
 	return nil
 }
 
-// expandPath converts a path to absolute using the home directory if it is not already absolute.
-func expandPath(path string) string {
+// expandPath converts a path to absolute. Paths starting with "./" are relative to configDir;
+// other relative paths are relative to the home directory.
+func expandPath(path string, configDir string) string {
 	if filepath.IsAbs(path) {
 		return path
+	}
+	if strings.HasPrefix(path, "./") || path == "." {
+		return filepath.Join(configDir, path)
 	}
 	if home, err := os.UserHomeDir(); err == nil {
 		return filepath.Join(home, path)
