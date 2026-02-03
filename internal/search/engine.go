@@ -59,7 +59,8 @@ func (e *Engine) Search(ctx context.Context, query *models.SearchQuery) (*models
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			results, err := e.keywordIndex.Search(ctx, query.Query, e.config.TopKCandidates)
+			kwOpts := &keyword.SearchOptions{TitleBoost: e.config.KeywordTitleBoost}
+			results, err := e.keywordIndex.Search(ctx, query.Query, e.config.TopKCandidates, kwOpts)
 			if err != nil {
 				errChan <- fmt.Errorf("keyword search failed: %w", err)
 				return

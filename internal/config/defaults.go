@@ -48,6 +48,9 @@ func ApplyDefaults(cfg *Config) {
 	if cfg.Search.TopKCandidates == 0 {
 		cfg.Search.TopKCandidates = 100
 	}
+	if cfg.Search.KeywordTitleBoost == 0 {
+		cfg.Search.KeywordTitleBoost = 10.0
+	}
 	if cfg.Watch.Extensions == nil {
 		cfg.Watch.Extensions = []string{".txt", ".md", ".rst", ".pdf", ".docx", ".xlsx", ".pptx", ".odp", ".ods"}
 	}

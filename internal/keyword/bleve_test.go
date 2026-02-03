@@ -33,7 +33,7 @@ func TestBleveIndex_SearchFindsContent(t *testing.T) {
 		t.Fatalf("Index: %v", err)
 	}
 
-	results, err := idx.Search(ctx, "Omnisyan", 10)
+	results, err := idx.Search(ctx, "Omnisyan", 10, nil)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestBleveIndex_SearchFindsContent(t *testing.T) {
 	}
 
 	// Standard analyzer (no stemming) so "bayes" matches "Bayes" in content
-	results2, err := idx.Search(ctx, "bayes", 10)
+	results2, err := idx.Search(ctx, "bayes", 10, nil)
 	if err != nil {
 		t.Fatalf("Search bayes: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestBleveIndex_SearchFindsTitle(t *testing.T) {
 	}
 
 	// Query "Report" (English analyzer stems so "Report" matches title)
-	results, err := idx.Search(ctx, "Report", 10)
+	results, err := idx.Search(ctx, "Report", 10, nil)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestBleveIndex_OpenExistingRecreatesIndex(t *testing.T) {
 		_ = idx2.Close()
 	}()
 
-	results, err := idx2.Search(ctx, "uniqueword", 10)
+	results, err := idx2.Search(ctx, "uniqueword", 10, nil)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestBleveIndex_Delete(t *testing.T) {
 		t.Fatalf("Delete: %v", err)
 	}
 
-	results, err := idx.Search(ctx, "onlyindoc1", 10)
+	results, err := idx.Search(ctx, "onlyindoc1", 10, nil)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -172,5 +172,60 @@ func TestNewBleveIndex_createsDir(t *testing.T) {
 
 	if _, err := os.Stat(indexPath); err != nil {
 		t.Errorf("index path should exist: %v", err)
+	}
+}
+
+func TestBleveIndex_Search_titleBoostRanksTitleMatchHigher(t *testing.T) {
+	dir := t.TempDir()
+	indexPath := filepath.Join(dir, "bleve")
+
+	idx, err := NewBleveIndex(indexPath)
+	if err != nil {
+		t.Fatalf("NewBleveIndex: %v", err)
+	}
+	defer func() {
+		_ = idx.Close()
+	}()
+
+	ctx := context.Background()
+	// Doc A: query terms only in title (filename), minimal content
+	docA := &models.Document{
+		ID:      "docA",
+		Title:   "hyperjump company profile 2021.pptx",
+		Content: "Slide content with no hyperjump or profile words.",
+	}
+	// Doc B: query terms only in content, generic title
+	docB := &models.Document{
+		ID:      "docB",
+		Title:   "Generic Report.docx",
+		Content: "This report discusses hyperjump and profile at length. Hyperjump profile hyperjump profile.",
+	}
+
+	if err := idx.Index(ctx, docA.ID, docA); err != nil {
+		t.Fatalf("Index docA: %v", err)
+	}
+	if err := idx.Index(ctx, docB.ID, docB); err != nil {
+		t.Fatalf("Index docB: %v", err)
+	}
+
+	// Without boost: content-heavy doc may rank first
+	resultsNoBoost, err := idx.Search(ctx, "hyperjump profile", 10, nil)
+	if err != nil {
+		t.Fatalf("Search (no boost): %v", err)
+	}
+	if len(resultsNoBoost) < 2 {
+		t.Fatalf("expected at least 2 results, got %d", len(resultsNoBoost))
+	}
+
+	// With title boost: doc with both terms in title should rank first
+	resultsBoosted, err := idx.Search(ctx, "hyperjump profile", 10, &SearchOptions{TitleBoost: 5.0})
+	if err != nil {
+		t.Fatalf("Search (title boost): %v", err)
+	}
+	if len(resultsBoosted) < 2 {
+		t.Fatalf("expected at least 2 results, got %d", len(resultsBoosted))
+	}
+	if resultsBoosted[0].ID != "docA" {
+		t.Errorf("with title boost, expected first result docA (title match), got %q (score %f)", resultsBoosted[0].ID, resultsBoosted[0].Score)
 	}
 }

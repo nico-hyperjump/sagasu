@@ -105,6 +105,9 @@ func TestApplyDefaults(t *testing.T) {
 		t.Errorf("when both search enabled flags are false, both should default to true; got keyword=%v semantic=%v",
 			cfg.Search.DefaultKeywordEnabled, cfg.Search.DefaultSemanticEnabled)
 	}
+	if cfg.Search.KeywordTitleBoost != 10.0 {
+		t.Errorf("default keyword_title_boost: got %f, want 10.0", cfg.Search.KeywordTitleBoost)
+	}
 	if cfg.Watch.Extensions == nil {
 		t.Error("watch extensions should be set by default")
 	}

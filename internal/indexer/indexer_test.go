@@ -16,6 +16,24 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
+func TestNormalizeTitleForKeywordSearch(t *testing.T) {
+	tests := []struct {
+		title string
+		want  string
+	}{
+		{"hyperjump_company_profile_2021.pptx", "hyperjump company profile 2021.pptx"},
+		{"no_underscores.pdf", "no underscores.pdf"},
+		{"single", "single"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		got := normalizeTitleForKeywordSearch(tt.title)
+		if got != tt.want {
+			t.Errorf("normalizeTitleForKeywordSearch(%q) = %q, want %q", tt.title, got, tt.want)
+		}
+	}
+}
+
 func TestExtensionAllowed(t *testing.T) {
 	tests := []struct {
 		ext     string

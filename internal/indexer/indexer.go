@@ -111,10 +111,21 @@ func (idx *Indexer) IndexDocument(ctx context.Context, input *models.DocumentInp
 	if err := idx.vectorIndex.Add(ctx, chunkIDs, embeddings); err != nil {
 		return fmt.Errorf("failed to index vectors: %w", err)
 	}
-	if err := idx.keywordIndex.Index(ctx, doc.ID, doc); err != nil {
+	// Normalize title for keyword search: underscores as spaces so "hyperjump_company_profile_2021.pptx"
+	// is searchable as "hyperjump company profile 2021" (standard analyzer does not split on underscore).
+	docForKeyword := *doc
+	docForKeyword.Title = normalizeTitleForKeywordSearch(doc.Title)
+	if err := idx.keywordIndex.Index(ctx, doc.ID, &docForKeyword); err != nil {
 		return fmt.Errorf("failed to index keywords: %w", err)
 	}
 	return nil
+}
+
+// normalizeTitleForKeywordSearch returns the title with underscores replaced by spaces
+// so that Bleve's standard analyzer can match multi-word queries (e.g. "hyperjump profile")
+// against filenames like "hyperjump_company_profile_2021.pptx".
+func normalizeTitleForKeywordSearch(title string) string {
+	return strings.ReplaceAll(title, "_", " ")
 }
 
 // IndexFile reads a file from path and indexes it. The document ID is derived from the
