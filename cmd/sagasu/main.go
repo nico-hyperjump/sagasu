@@ -175,6 +175,25 @@ func runServer() {
 	_ = srv.Stop(ctx)
 }
 
+// printSearchUsage prints search subcommand usage and search efficiency hints.
+func printSearchUsage(fs *flag.FlagSet) {
+	fmt.Fprintf(fs.Output(), "Usage: sagasu search [flags] <query>\n\n")
+	fs.PrintDefaults()
+	fmt.Fprintf(fs.Output(), `
+Search tips (efficient queries):
+  • Multi-word: Query is tokenized; documents matching more terms rank higher.
+  • Keyword vs semantic: Increase --keyword-weight for exact term matches;
+    increase --semantic-weight for meaning-based matches.
+  • Narrow results: Raise --min-score to filter low-relevance hits.
+  • More results: Use --limit to get more candidates (e.g. --limit 20).
+
+Examples:
+  sagasu search "machine learning"
+  sagasu search --keyword-weight 0.7 "neural networks"
+  sagasu search --min-score 0.1 --limit 20 "your query"
+`)
+}
+
 // searchArgsReorder moves any flags (and their values) that appear after the query
 // to the front of the slice so that flag.Parse() sees them. Go's flag package
 // stops at the first non-flag argument, so "sagasu search \"query\" -min-score 0.5"
@@ -203,11 +222,12 @@ func runSearch() {
 	kwWeight := fs.Float64("keyword-weight", 0.5, "keyword weight")
 	semWeight := fs.Float64("semantic-weight", 0.5, "semantic weight")
 	outputFormat := fs.String("output", "text", "output format: text (human-readable) or json (parseable)")
+	fs.Usage = func() { printSearchUsage(fs) }
 	searchArgs := searchArgsReorder(os.Args[2:])
 	_ = fs.Parse(searchArgs)
 
 	if fs.NArg() < 1 {
-		fmt.Println("Usage: sagasu search [flags] <query>")
+		printSearchUsage(fs)
 		os.Exit(1)
 	}
 	queryStr := fs.Arg(0)
