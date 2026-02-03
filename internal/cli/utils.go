@@ -17,6 +17,8 @@ type SearchOutputFormat string
 const (
 	// OutputText is human-readable text (default).
 	OutputText SearchOutputFormat = "text"
+	// OutputCompact is one result per line (compact text).
+	OutputCompact SearchOutputFormat = "compact"
 	// OutputJSON is structured JSON for machine consumption.
 	OutputJSON SearchOutputFormat = "json"
 )
@@ -29,6 +31,9 @@ func WriteSearchResults(w io.Writer, response *models.SearchResponse, format Sea
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")
 		return enc.Encode(response)
+	case OutputCompact:
+		writeSearchResultsCompact(w, response)
+		return nil
 	default:
 		writeSearchResultsText(w, response)
 		return nil
@@ -63,6 +68,47 @@ func writeOneResult(w io.Writer, result *models.SearchResult, source string) {
 	}
 	fmt.Fprintf(w, "\n%s\n", Truncate(result.Document.Content, 200))
 	fmt.Fprintln(w)
+}
+
+// writeSearchResultsCompact writes one result per line (source, rank, score, file path).
+func writeSearchResultsCompact(w io.Writer, response *models.SearchResponse) {
+	total := response.TotalNonSemantic + response.TotalSemantic
+	fmt.Fprintf(w, "Found %d results in %dms\n", total, response.QueryTime)
+	for _, result := range response.NonSemanticResults {
+		writeOneResultCompact(w, result, "keyword")
+	}
+	for _, result := range response.SemanticResults {
+		writeOneResultCompact(w, result, "semantic")
+	}
+}
+
+func writeOneResultCompact(w io.Writer, result *models.SearchResult, source string) {
+	path := DocumentFilePath(result.Document)
+	if path == "" {
+		path = SanitizeForLine(result.Document.Title)
+	}
+	if path == "" {
+		path = Truncate(SanitizeForLine(result.Document.Content), 80)
+	}
+	fmt.Fprintf(w, "[%s] #%d %.4f | %s\n", source, result.Rank, result.Score, path)
+}
+
+// DocumentFilePath returns the stored file path from document metadata (source_path), or empty if not set.
+func DocumentFilePath(doc *models.Document) string {
+	if doc == nil || doc.Metadata == nil {
+		return ""
+	}
+	v, ok := doc.Metadata["source_path"]
+	if !ok {
+		return ""
+	}
+	s, _ := v.(string)
+	return s
+}
+
+// SanitizeForLine replaces newlines and tabs with spaces for single-line output.
+func SanitizeForLine(s string) string {
+	return strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(s, "\n", " "), "\t", " "))
 }
 
 // PrintSearchResults prints search results to stdout in text format (backward compatible).

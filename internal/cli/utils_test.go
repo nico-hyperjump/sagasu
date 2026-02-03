@@ -151,6 +151,170 @@ func TestWriteSearchResults_text_semanticOnly(t *testing.T) {
 	}
 }
 
+func TestWriteSearchResults_compact(t *testing.T) {
+	response := &models.SearchResponse{
+		Query:            "q",
+		QueryTime:        5,
+		TotalNonSemantic: 1,
+		TotalSemantic:    1,
+		NonSemanticResults: []*models.SearchResult{
+			{
+				Rank:          1,
+				Score:         0.5,
+				KeywordScore:  0.5,
+				SemanticScore: 0,
+				Document: &models.Document{
+					ID:       "id-k",
+					Title:    "Keyword Doc",
+					Content:  "Some keyword content",
+					Metadata: map[string]interface{}{"source_path": "/path/to/keyword-file.txt"},
+				},
+			},
+		},
+		SemanticResults: []*models.SearchResult{
+			{
+				Rank:          1,
+				Score:         0.8,
+				KeywordScore:  0,
+				SemanticScore: 0.8,
+				Document: &models.Document{
+					ID:       "id-s",
+					Title:    "",
+					Content:  "Semantic content with\nnewline",
+					Metadata: map[string]interface{}{"source_path": "/home/user/semantic.pdf"},
+				},
+			},
+		},
+	}
+	var buf bytes.Buffer
+	err := WriteSearchResults(&buf, response, OutputCompact)
+	if err != nil {
+		t.Fatalf("WriteSearchResults(compact): %v", err)
+	}
+	out := buf.String()
+	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
+	if len(lines) != 3 {
+		t.Errorf("compact should have 3 lines (header + 2 results), got %d:\n%s", len(lines), out)
+	}
+	if !strings.HasPrefix(lines[0], "Found 2 results") {
+		t.Errorf("first line should be header: %q", lines[0])
+	}
+	if !strings.Contains(lines[1], "[keyword]") || !strings.Contains(lines[1], "/path/to/keyword-file.txt") {
+		t.Errorf("second line should be keyword result with file path: %q", lines[1])
+	}
+	if !strings.Contains(lines[2], "[semantic]") || !strings.Contains(lines[2], "/home/user/semantic.pdf") {
+		t.Errorf("third line should be semantic result with file path: %q", lines[2])
+	}
+	// No ID in output
+	if strings.Contains(lines[1], "id-k") || strings.Contains(lines[2], "id-s") {
+		t.Errorf("compact output should not show document ID")
+	}
+	// Newline in content should be collapsed when path is missing (not in this case)
+	if strings.Contains(lines[2], "\n") {
+		t.Errorf("compact result line must not contain newline: %q", lines[2])
+	}
+}
+
+func TestWriteSearchResults_compact_fallbackToTitleThenPreview(t *testing.T) {
+	// No source_path in metadata: fallback to title, then content preview
+	response := &models.SearchResponse{
+		Query:             "q",
+		QueryTime:         1,
+		TotalNonSemantic:  1,
+		TotalSemantic:     0,
+		NonSemanticResults: []*models.SearchResult{
+			{
+				Rank: 1, Score: 0.5,
+				Document: &models.Document{
+					ID: "x", Title: "Fallback Title", Content: "Content here",
+					Metadata: nil, // no source_path
+				},
+			},
+		},
+	}
+	var buf bytes.Buffer
+	err := WriteSearchResults(&buf, response, OutputCompact)
+	if err != nil {
+		t.Fatalf("WriteSearchResults(compact fallback): %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Fallback Title") {
+		t.Errorf("compact with no source_path should show title: %q", out)
+	}
+}
+
+func TestWriteSearchResults_compact_fallbackToContentPreview(t *testing.T) {
+	// No source_path and no title: fallback to content preview
+	response := &models.SearchResponse{
+		Query:             "q",
+		QueryTime:         1,
+		TotalNonSemantic:  1,
+		TotalSemantic:     0,
+		NonSemanticResults: []*models.SearchResult{
+			{
+				Rank: 1, Score: 0.5,
+				Document: &models.Document{
+					ID: "x", Title: "", Content: "Only content preview appears here",
+					Metadata: nil,
+				},
+			},
+		},
+	}
+	var buf bytes.Buffer
+	err := WriteSearchResults(&buf, response, OutputCompact)
+	if err != nil {
+		t.Fatalf("WriteSearchResults(compact content fallback): %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Only content preview") {
+		t.Errorf("compact with no path/title should show content preview: %q", out)
+	}
+}
+
+func TestDocumentFilePath(t *testing.T) {
+	tests := []struct {
+		name string
+		doc  *models.Document
+		want string
+	}{
+		{"nil doc", nil, ""},
+		{"nil metadata", &models.Document{Metadata: nil}, ""},
+		{"empty metadata", &models.Document{Metadata: map[string]interface{}{}}, ""},
+		{"source_path set", &models.Document{Metadata: map[string]interface{}{"source_path": "/a/b.txt"}}, "/a/b.txt"},
+		{"source_path not string", &models.Document{Metadata: map[string]interface{}{"source_path": 123}}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := DocumentFilePath(tt.doc)
+			if got != tt.want {
+				t.Errorf("DocumentFilePath() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestWriteSearchResults_compact_empty(t *testing.T) {
+	response := &models.SearchResponse{
+		Query:            "q",
+		QueryTime:        0,
+		TotalNonSemantic: 0,
+		TotalSemantic:    0,
+	}
+	var buf bytes.Buffer
+	err := WriteSearchResults(&buf, response, OutputCompact)
+	if err != nil {
+		t.Fatalf("WriteSearchResults(compact empty): %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Found 0 results") {
+		t.Errorf("expected header with 0 results: %q", out)
+	}
+	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
+	if len(lines) != 1 {
+		t.Errorf("compact empty should have 1 line, got %d", len(lines))
+	}
+}
+
 func TestWriteSearchResults_unknownFormatTreatedAsText(t *testing.T) {
 	response := &models.SearchResponse{Query: "x", QueryTime: 0}
 	var buf bytes.Buffer
@@ -160,6 +324,31 @@ func TestWriteSearchResults_unknownFormatTreatedAsText(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "Found") {
 		t.Errorf("unknown format should fall back to text; got %q", buf.String())
+	}
+}
+
+func TestSanitizeForLine(t *testing.T) {
+	tests := []struct {
+		name string
+		s    string
+		want string
+	}{
+		{"empty", "", ""},
+		{"no change", "hello world", "hello world"},
+		{"newline", "a\nb", "a b"},
+		{"multiple newlines", "a\n\nb", "a  b"},
+		{"tab", "a\tb", "a b"},
+		{"newline and tab", "a\nb\tc", "a b c"},
+		{"leading trailing space", "  x  ", "x"},
+		{"leading newline", "\nhello", "hello"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := SanitizeForLine(tt.s)
+			if got != tt.want {
+				t.Errorf("SanitizeForLine(%q) = %q, want %q", tt.s, got, tt.want)
+			}
+		})
 	}
 }
 

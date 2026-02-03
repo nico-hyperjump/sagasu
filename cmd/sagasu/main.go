@@ -221,7 +221,7 @@ func runSearch() {
 	minScore := fs.Float64("min-score", 0.05, "minimum score threshold (exclude results below)")
 	kwWeight := fs.Float64("keyword-weight", 0.5, "keyword weight")
 	semWeight := fs.Float64("semantic-weight", 0.5, "semantic weight")
-	outputFormat := fs.String("output", "text", "output format: text (human-readable) or json (parseable)")
+	outputFormat := fs.String("output", "text", "output format: text (human-readable), compact (one result per line), or json (parseable)")
 	fs.Usage = func() { printSearchUsage(fs) }
 	searchArgs := searchArgsReorder(os.Args[2:])
 	_ = fs.Parse(searchArgs)
@@ -238,8 +238,10 @@ func runSearch() {
 		format = cli.OutputJSON
 	case "text":
 		format = cli.OutputText
+	case "compact":
+		format = cli.OutputCompact
 	default:
-		fmt.Printf("Unknown output format %q; use text or json\n", *outputFormat)
+		fmt.Printf("Unknown output format %q; use text, compact, or json\n", *outputFormat)
 		os.Exit(1)
 	}
 
