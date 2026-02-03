@@ -1,0 +1,12 @@
+/bin/
+*.db
+*.db-wal
+*.db-shm
+/usr/local/var/sagasu/
+*.onnx
+*.log
+vendor/
+.idea/
+.vscode/
+*.test
+coverage.out

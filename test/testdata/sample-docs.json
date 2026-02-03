@@ -1,0 +1,17 @@
+[
+  {
+    "id": "doc1",
+    "title": "Machine Learning Basics",
+    "content": "Machine learning is a subset of artificial intelligence that enables systems to learn from data."
+  },
+  {
+    "id": "doc2",
+    "title": "Neural Networks",
+    "content": "Neural networks are computing systems inspired by biological neural networks. They consist of layers of nodes."
+  },
+  {
+    "id": "doc3",
+    "title": "Search Algorithms",
+    "content": "Search algorithms are used to find information in datasets. Common types include keyword and semantic search."
+  }
+]

@@ -1,0 +1,24 @@
+server:
+  host: "localhost"
+  port: 8080
+
+storage:
+  database_path: "/usr/local/var/sagasu/data/db/documents.db"
+  bleve_index_path: "/usr/local/var/sagasu/data/indices/bleve"
+  faiss_index_path: "/usr/local/var/sagasu/data/indices/faiss"
+
+embedding:
+  model_path: "/usr/local/var/sagasu/data/models/all-MiniLM-L6-v2.onnx"
+  dimensions: 384
+  max_tokens: 256
+  use_quantization: true
+  cache_size: 10000
+
+search:
+  default_limit: 10
+  max_limit: 100
+  default_keyword_weight: 0.5
+  default_semantic_weight: 0.5
+  chunk_size: 512
+  chunk_overlap: 50
+  top_k_candidates: 100
