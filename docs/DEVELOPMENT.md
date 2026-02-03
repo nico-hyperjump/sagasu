@@ -3,8 +3,8 @@
 ## Prerequisites
 
 - **Go 1.21 or later**
-- **CGO enabled** (required for production build with real embeddings)
-- **ONNX Runtime** – for production semantic search (real embedder). Without it, the app falls back to a mock embedder.
+- **CGO enabled** (required for real embeddings)
+- **ONNX Runtime** – required for semantic search. Install it for development and production:
 
 ```bash
 # macOS
@@ -17,25 +17,42 @@ Optional:
 
 ## Building
 
-### Production build (real embeddings)
+### Recommended: development with real semantic search
 
-Ensure ONNX Runtime is installed, then:
+1. Install ONNX Runtime (see above).
 
-```bash
-make build
-```
+2. Build and download the model:
 
-This uses `CGO_ENABLED=1` and links to the ONNX Runtime library. You also need the embedding model on disk (see [Production install from source](#production-install-from-source) or the formula’s `post_install`).
+   ```bash
+   make build
+   ./scripts/download-model.sh ./data/models
+   ```
 
-### Development build (mock embedder)
+3. Copy the example config and set dev paths (e.g. `embedding.model_path`, `storage.database_path`, `storage.bleve_index_path` to `./data/...`):
 
-For quick local testing without ONNX or the model:
+   ```bash
+   cp config.yaml.example config.yaml
+   # Edit config.yaml: set model_path to ./data/models/all-MiniLM-L6-v2.onnx
+   # and storage paths under ./data/
+   ```
+
+4. Run the server:
+
+   ```bash
+   ./bin/sagasu server --config config.yaml
+   ```
+
+Both keyword and semantic search work. The mock embedder is only a fallback when ONNX is unavailable (e.g. CI, `CGO_ENABLED=0`)—it produces hash-based vectors, so semantic search does not behave meaningfully.
+
+### Fallback: build without ONNX
+
+For CI, quick smoke tests, or when you cannot install ONNX:
 
 ```bash
 CGO_ENABLED=0 go build -o bin/sagasu ./cmd/sagasu
 ```
 
-The binary will use a mock embedder and in-memory vector index.
+Keyword search works; semantic search uses a mock (hash-based vectors, not real similarity).
 
 ## Production install from source
 
