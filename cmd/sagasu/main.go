@@ -202,6 +202,7 @@ func runSearch() {
 	minScore := fs.Float64("min-score", 0.05, "minimum score threshold (exclude results below)")
 	kwWeight := fs.Float64("keyword-weight", 0.5, "keyword weight")
 	semWeight := fs.Float64("semantic-weight", 0.5, "semantic weight")
+	outputFormat := fs.String("output", "text", "output format: text (human-readable) or json (parseable)")
 	searchArgs := searchArgsReorder(os.Args[2:])
 	_ = fs.Parse(searchArgs)
 
@@ -210,6 +211,17 @@ func runSearch() {
 		os.Exit(1)
 	}
 	queryStr := fs.Arg(0)
+
+	format := cli.OutputText
+	switch *outputFormat {
+	case "json":
+		format = cli.OutputJSON
+	case "text":
+		format = cli.OutputText
+	default:
+		fmt.Printf("Unknown output format %q; use text or json\n", *outputFormat)
+		os.Exit(1)
+	}
 
 	searchQuery := &models.SearchQuery{
 		Query:          queryStr,
@@ -223,23 +235,26 @@ func runSearch() {
 		// Use HTTP API when server is running (avoids Bleve/SQLite lock conflict).
 		response, err := searchViaHTTP(*serverURL, searchQuery)
 		if err != nil {
-			fmt.Printf("Search failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Search failed: %v\n", err)
 			os.Exit(1)
 		}
-		cli.PrintSearchResults(response)
+		if err := cli.WriteSearchResults(os.Stdout, response, format); err != nil {
+			fmt.Fprintf(os.Stderr, "Output failed: %v\n", err)
+			os.Exit(1)
+		}
 		return
 	}
 
 	// Direct storage access (when server is not running).
 	cfg, _, err := loadConfig(*configPath)
 	if err != nil {
-		fmt.Printf("Failed to load config: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
 		os.Exit(1)
 	}
 	debugMode := cfg.Debug
 	logger, err := utils.NewLogger(debugMode)
 	if err != nil {
-		fmt.Printf("Failed to create logger: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Failed to create logger: %v\n", err)
 		os.Exit(1)
 	}
 	defer logger.Sync()
@@ -252,10 +267,13 @@ func runSearch() {
 
 	response, err := components.Engine.Search(context.Background(), searchQuery)
 	if err != nil {
-		fmt.Printf("Search failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Search failed: %v\n", err)
 		os.Exit(1)
 	}
-	cli.PrintSearchResults(response)
+	if err := cli.WriteSearchResults(os.Stdout, response, format); err != nil {
+		fmt.Fprintf(os.Stderr, "Output failed: %v\n", err)
+		os.Exit(1)
+	}
 }
 
 func searchViaHTTP(serverURL string, query *models.SearchQuery) (*models.SearchResponse, error) {
@@ -561,6 +579,7 @@ Examples:
   sagasu server
   sagasu search "machine learning algorithms"
   sagasu search --min-score 0.1 "raosan"
+  sagasu search --output json "query"   # structured JSON for other apps
   sagasu search --keyword-weight 0.7 --semantic-weight 0.3 "neural networks"
   sagasu index --title "My Document" document.txt
   sagasu delete doc-123

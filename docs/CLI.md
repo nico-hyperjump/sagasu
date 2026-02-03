@@ -43,6 +43,7 @@ sagasu search [flags] <query>
 | --min-score       | 0.05                  | Minimum score threshold.                                                                          |
 | --keyword-weight  | 0.5                   | Keyword score weight.                                                                             |
 | --semantic-weight | 0.5                   | Semantic score weight.                                                                            |
+| --output          | text                  | Output format: `text` (human-readable) or `json` (structured, parseable for other apps).          |
 
 **Examples:**
 
@@ -51,6 +52,7 @@ sagasu search "machine learning algorithms"
 sagasu search --limit 20 "neural networks"
 sagasu search --min-score 0.1 "raosan"
 sagasu search --keyword-weight 0.7 --semantic-weight 0.3 "search engine"
+sagasu search --output json "query"   # JSON output for piping to jq or other tools
 ```
 
 ---
