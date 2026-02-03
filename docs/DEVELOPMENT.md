@@ -124,6 +124,38 @@ go test -v ./internal/...
 
 Integration tests (under `test/integration/`) use real SQLite and Bleve and a temp directory.
 
+## Keyword search not finding text inside files (e.g. docx)
+
+If you see **0 keyword-only** results but semantic results (e.g. for a word you know is in a .docx), the Bleve index was likely created with an older binary. The index stores its mapping at creation time; you must **rebuild, remove the index, and re-index** with the current binary:
+
+1. **Rebuild the binary** (so the new Bleve mapping is used when creating an index):
+
+   ```bash
+   make build
+   ```
+
+2. **Remove the existing database and Bleve index** (use the paths from your `config.yaml`):
+
+   ```bash
+   rm -rf ./dev/data/db ./dev/data/indices/bleve
+   ```
+
+3. **Re-index** by starting the server (it indexes all files in `watch.directories` on startup and keeps watching for changes):
+
+   ```bash
+   ./bin/sagasu server
+   ```
+
+   Leave it running. Optionally, you can instead run `./bin/sagasu index ./dev/sample` once to populate without the server, then use `./bin/sagasu search --server "" "YourSearchTerm"`.
+
+4. **Search** (from another terminal; default uses the server at http://localhost:8080):
+
+   ```bash
+   ./bin/sagasu search "YourSearchTerm"
+   ```
+
+   You should now see keyword results when the term appears in document content. The server keeps watching your directories and re-indexes when files change.
+
 ## Benchmarks
 
 ```bash

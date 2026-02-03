@@ -35,13 +35,14 @@ Run a hybrid search from the command line.
 sagasu search [flags] <query>
 ```
 
-| Flag              | Default      | Description              |
-| ----------------- | ------------ | ------------------------ |
-| --config          | (see server) | Config file path.        |
-| --limit           | 10           | Number of results.       |
-| --min-score       | 0.05         | Minimum score threshold. |
-| --keyword-weight  | 0.5          | Keyword score weight.    |
-| --semantic-weight | 0.5          | Semantic score weight.   |
+| Flag              | Default               | Description                                                                                       |
+| ----------------- | --------------------- | ------------------------------------------------------------------------------------------------- |
+| --config          | (see server)          | Config file path.                                                                                 |
+| --server          | http://localhost:8080 | Server URL. Use `--server ""` to use direct storage (config DB/Bleve) when server is not running. |
+| --limit           | 10                    | Number of results.                                                                                |
+| --min-score       | 0.05                  | Minimum score threshold.                                                                          |
+| --keyword-weight  | 0.5                   | Keyword score weight.                                                                             |
+| --semantic-weight | 0.5                   | Semantic score weight.                                                                            |
 
 **Examples:**
 
@@ -56,7 +57,7 @@ sagasu search --keyword-weight 0.7 --semantic-weight 0.3 "search engine"
 
 ### index
 
-Index a document from a file. Supports plain text and binary formats:
+Index a file or a directory. For a directory, only files whose extension is in `watch.extensions` (from config) are indexed. Supports plain text and binary formats:
 
 - **Plain text**: `.txt`, `.md`, `.rst` (content used as-is)
 - **PDF**: `.pdf` (text extracted from pages)
@@ -64,7 +65,7 @@ Index a document from a file. Supports plain text and binary formats:
 - **Excel**: `.xlsx` (cell values extracted from all sheets)
 
 ```bash
-sagasu index [flags] <file>
+sagasu index [flags] <file-or-directory>
 ```
 
 | Flag     | Default      | Description                                                       |
@@ -78,6 +79,7 @@ sagasu index [flags] <file>
 sagasu index document.txt
 sagasu index report.pdf
 sagasu index spreadsheet.xlsx
+sagasu index ./dev/sample
 ```
 
 ---

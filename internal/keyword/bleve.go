@@ -4,9 +4,10 @@ package keyword
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/blevesearch/bleve/v2"
-	"github.com/blevesearch/bleve/v2/analysis/lang/en"
+	"github.com/blevesearch/bleve/v2/analysis/analyzer/standard"
 	"github.com/hyperjump/sagasu/internal/models"
 )
 
@@ -16,21 +17,41 @@ type BleveIndex struct {
 }
 
 // NewBleveIndex creates or opens a Bleve index at path.
+// If the index already exists, we always remove and recreate it so the mapping
+// (content/title searchable) is guaranteed. The caller must re-index documents
+// (e.g. server runs SyncExistingFiles after this).
 func NewBleveIndex(path string) (*BleveIndex, error) {
-	mapping := bleve.NewIndexMapping()
+	im := bleve.NewIndexMapping()
 
 	docMapping := bleve.NewDocumentMapping()
 	textFieldMapping := bleve.NewTextFieldMapping()
-	textFieldMapping.Analyzer = en.AnalyzerName
+	// Use standard analyzer (lowercase + tokenize, no stemming) so queries like "bayes" match
+	// the exact word; English analyzer stems e.g. "Bayesian" -> "bayesi" and "bayes" -> "bay", so they don't match.
+	textFieldMapping.Analyzer = standard.Name
 	docMapping.AddFieldMappingsAt("content", textFieldMapping)
 	docMapping.AddFieldMappingsAt("title", textFieldMapping)
 	keywordFieldMapping := bleve.NewKeywordFieldMapping()
 	docMapping.AddFieldMappingsAt("id", keywordFieldMapping)
-	mapping.AddDocumentMapping("document", docMapping)
+	im.AddDocumentMapping("document", docMapping)
+	im.DefaultType = "document"
+	im.DefaultMapping = docMapping // so _default type also indexes content/title
 
-	index, err := bleve.New(path, mapping)
+	index, err := bleve.New(path, im)
 	if err == bleve.ErrorIndexPathExists {
 		index, err = bleve.Open(path)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open Bleve index: %w", err)
+		}
+		// Persisted mapping cannot be changed. Recreate the index with our mapping
+		// so content/title are searchable. Caller re-indexes via SyncExistingFiles.
+		_ = index.Close()
+		if err := os.RemoveAll(path); err != nil {
+			return nil, fmt.Errorf("keyword index path %s: remove for recreate: %w", path, err)
+		}
+		index, err = bleve.New(path, im)
+		if err != nil {
+			return nil, fmt.Errorf("failed to recreate Bleve index: %w", err)
+		}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to create/open Bleve index: %w", err)

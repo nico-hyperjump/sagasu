@@ -194,7 +194,7 @@ func searchArgsReorder(args []string) []string {
 func runSearch() {
 	fs := flag.NewFlagSet("search", flag.ExitOnError)
 	configPath := fs.String("config", defaultConfigPath, "config file path")
-	serverURL := fs.String("server", "http://localhost:8080", "server URL (empty = use direct storage)")
+	serverURL := fs.String("server", "http://localhost:8080", "server URL (empty = use direct storage when server is not running)")
 	limit := fs.Int("limit", 10, "number of results")
 	minScore := fs.Float64("min-score", 0.05, "minimum score threshold (exclude results below)")
 	kwWeight := fs.Float64("keyword-weight", 0.5, "keyword weight")
@@ -283,10 +283,10 @@ func runIndex() {
 	_ = fs.Parse(os.Args[2:])
 
 	if fs.NArg() < 1 {
-		fmt.Println("Usage: sagasu index [flags] <file>")
+		fmt.Println("Usage: sagasu index [flags] <file-or-directory>")
 		os.Exit(1)
 	}
-	filePath := fs.Arg(0)
+	path := fs.Arg(0)
 
 	cfg, _, err := loadConfig(*configPath)
 	if err != nil {
@@ -307,12 +307,31 @@ func runIndex() {
 	}
 	defer components.Close()
 
-	// Use nil for allowedExts to accept any file (CLI index has no extension filter)
-	if err := components.Indexer.IndexFile(context.Background(), filePath, nil); err != nil {
+	ctx := context.Background()
+	info, err := os.Stat(path)
+	if err != nil {
+		fmt.Printf("Failed to stat path: %v\n", err)
+		os.Exit(1)
+	}
+	if info.IsDir() {
+		exts := cfg.Watch.Extensions
+		if exts == nil {
+			exts = []string{".txt", ".md", ".rst", ".pdf", ".docx", ".xlsx"}
+		}
+		n, err := components.Indexer.IndexDirectory(ctx, path, exts)
+		if err != nil {
+			fmt.Printf("Indexing directory failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Indexed %d file(s) from %s\n", n, path)
+		return
+	}
+	// Single file: no extension filter
+	if err := components.Indexer.IndexFile(ctx, path, nil); err != nil {
 		fmt.Printf("Indexing failed: %v\n", err)
 		os.Exit(1)
 	}
-	absPath, _ := filepath.Abs(filePath)
+	absPath, _ := filepath.Abs(path)
 	docID := fileid.FileDocID(absPath)
 	fmt.Printf("Document indexed successfully: %s\n", docID)
 }
@@ -522,7 +541,7 @@ Server Flags:
 
 Search Flags:
   --config string           Config file path (for direct storage mode)
-  --server string           Server URL (default: http://localhost:8080). Use empty to access storage directly.
+  --server string           Server URL (default: http://localhost:8080). Use empty (--server "") to use direct storage when server is not running.
   --limit int               Number of results (default: 10)
   --min-score float         Minimum score threshold (default: 0.05)
   --keyword-weight float    Keyword weight (default: 0.5)

@@ -217,3 +217,34 @@ func TestIndexFile_excelWithExtractor(t *testing.T) {
 		t.Errorf("unexpected doc: title=%q content=%q", doc.Title, doc.Content)
 	}
 }
+
+func TestIndexDirectory(t *testing.T) {
+	dir := t.TempDir()
+	idx, _ := testIndexerWithStorage(t, dir)
+	ctx := context.Background()
+
+	sub := filepath.Join(dir, "sub")
+	if err := os.Mkdir(sub, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("file a"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "b.txt"), []byte("file b"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, "c.txt"), []byte("file c"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "skip.xyz"), []byte("skip"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	n, err := idx.IndexDirectory(ctx, dir, []string{".txt"})
+	if err != nil {
+		t.Fatalf("IndexDirectory: %v", err)
+	}
+	if n != 3 {
+		t.Errorf("IndexDirectory: indexed %d files, want 3", n)
+	}
+}

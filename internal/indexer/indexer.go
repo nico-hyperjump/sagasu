@@ -161,6 +161,49 @@ func (idx *Indexer) IndexFile(ctx context.Context, path string, allowedExts []st
 	return nil
 }
 
+// IndexDirectory walks dir recursively and indexes each regular file whose extension
+// is in allowedExts (if non-nil and non-empty; otherwise all files). Returns the number
+// of files indexed and the first error encountered, if any.
+func (idx *Indexer) IndexDirectory(ctx context.Context, dir string, allowedExts []string) (n int, err error) {
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return 0, fmt.Errorf("absolute path: %w", err)
+	}
+	info, err := os.Stat(absDir)
+	if err != nil {
+		return 0, fmt.Errorf("stat directory: %w", err)
+	}
+	if !info.IsDir() {
+		return 0, fmt.Errorf("not a directory: %s", absDir)
+	}
+	err = filepath.WalkDir(absDir, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() {
+			return nil
+		}
+		ext := strings.ToLower(filepath.Ext(path))
+		if len(allowedExts) > 0 && !extensionAllowed(ext, allowedExts) {
+			return nil
+		}
+		// Resolve symlinks so we only index regular files
+		finfo, statErr := os.Stat(path)
+		if statErr != nil {
+			return nil
+		}
+		if !finfo.Mode().IsRegular() {
+			return nil
+		}
+		if indexErr := idx.IndexFile(ctx, path, allowedExts); indexErr != nil {
+			return indexErr
+		}
+		n++
+		return nil
+	})
+	return n, err
+}
+
 func (idx *Indexer) extractContent(path string) (string, error) {
 	if idx.extractor != nil {
 		return idx.extractor.Extract(path)

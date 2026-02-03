@@ -1,6 +1,7 @@
 package extract
 
 import (
+	"archive/zip"
 	"bytes"
 	"os"
 	"path/filepath"
@@ -120,6 +121,28 @@ func TestExtractBytes_unknownExtension(t *testing.T) {
 	}
 	// Unknown extension falls back to plain
 	if got != "raw content" {
+		t.Errorf("got %q", got)
+	}
+}
+
+// minimalDocx returns a minimal .docx zip bytes with word/document.xml containing the given text in <w:t> tags.
+func minimalDocx(text string) []byte {
+	var buf bytes.Buffer
+	w := zip.NewWriter(&buf)
+	fw, _ := w.Create("word/document.xml")
+	_, _ = fw.Write([]byte(`<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>` + text + `</w:t></w:r></w:p></w:body></w:document>`))
+	_ = w.Close()
+	return buf.Bytes()
+}
+
+func TestExtractBytes_docx(t *testing.T) {
+	e := NewExtractor()
+	content := minimalDocx("Searchable docx content")
+	got, err := e.ExtractBytes(content, ".docx")
+	if err != nil {
+		t.Fatalf("ExtractBytes: %v", err)
+	}
+	if got != "Searchable docx content" {
 		t.Errorf("got %q", got)
 	}
 }
