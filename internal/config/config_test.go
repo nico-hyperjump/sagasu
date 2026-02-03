@@ -29,6 +29,32 @@ storage:
 	if cfg.Storage.DatabasePath == "" {
 		t.Error("database_path should be set")
 	}
+	if cfg.Debug {
+		t.Error("debug should default to false when unset")
+	}
+}
+
+func TestLoad_debugTrue(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	content := `
+debug: true
+server:
+  host: "localhost"
+  port: 8080
+storage:
+  database_path: "test.db"
+`
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Debug {
+		t.Error("debug should be true when set in config")
+	}
 }
 
 func TestLoad_expandPathDotSlashRelativeToConfigDir(t *testing.T) {

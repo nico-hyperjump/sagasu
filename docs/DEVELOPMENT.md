@@ -43,6 +43,14 @@ Optional:
    ./bin/sagasu server --config config.yaml
    ```
 
+   For verbose debug logging (directory changes, file indexing, etc.):
+
+   ```bash
+   ./bin/sagasu server --config config.yaml --debug
+   ```
+
+   Or set `debug: true` in `config.yaml`.
+
 5. Add files to the watched directories (e.g. `./dev/sample`).
 6. Search something by opening a new terminal and running:
    ```bash

@@ -12,11 +12,12 @@ import (
 
 // Config holds all configuration for the application.
 type Config struct {
-	Server   ServerConfig   `yaml:"server"`
-	Storage  StorageConfig  `yaml:"storage"`
+	Debug   bool           `yaml:"debug"`
+	Server  ServerConfig   `yaml:"server"`
+	Storage StorageConfig  `yaml:"storage"`
 	Embedding EmbeddingConfig `yaml:"embedding"`
-	Search   SearchConfig   `yaml:"search"`
-	Watch    WatchConfig    `yaml:"watch"`
+	Search  SearchConfig   `yaml:"search"`
+	Watch   WatchConfig    `yaml:"watch"`
 }
 
 // WatchConfig holds directory watch settings.

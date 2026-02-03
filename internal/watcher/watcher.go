@@ -11,13 +11,14 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"go.uber.org/zap"
 )
 
 const defaultDebounce = 400 * time.Millisecond
 
 // Watcher watches directories and invokes callbacks on file changes.
 type Watcher struct {
-	roots      []string
+	roots       []string
 	extensions  []string
 	recursive   bool
 	onIndex     func(path string)
@@ -30,12 +31,22 @@ type Watcher struct {
 	done        chan struct{}
 	started     bool
 	stopOnce    sync.Once
+	logger      *zap.Logger // optional; when set, logs debug events
+}
+
+// WatcherOption configures a Watcher.
+type WatcherOption func(*Watcher)
+
+// WithLogger sets a logger for debug output (directory changes, file events, etc.).
+func WithLogger(l *zap.Logger) WatcherOption {
+	return func(w *Watcher) { w.logger = l }
 }
 
 // NewWatcher creates a watcher. onIndex and onRemove are called for file index and remove events.
 // roots are initial directory paths to watch; extensions filter which files (empty = all).
-func NewWatcher(roots []string, extensions []string, recursive bool, onIndex, onRemove func(path string)) *Watcher {
-	return &Watcher{
+// Options (e.g. WithLogger) can be passed for debug logging.
+func NewWatcher(roots []string, extensions []string, recursive bool, onIndex, onRemove func(path string), opts ...WatcherOption) *Watcher {
+	w := &Watcher{
 		roots:       roots,
 		extensions:  extensions,
 		recursive:   recursive,
@@ -46,6 +57,10 @@ func NewWatcher(roots []string, extensions []string, recursive bool, onIndex, on
 		rootPaths:   make(map[string][]string),
 		done:        make(chan struct{}),
 	}
+	for _, opt := range opts {
+		opt(w)
+	}
+	return w
 }
 
 // Start starts the watcher. It runs until ctx is cancelled or Stop is called.
@@ -62,6 +77,9 @@ func (w *Watcher) Start(ctx context.Context) error {
 	}
 	w.watcher = watcher
 	w.started = true
+	if w.logger != nil {
+		w.logger.Debug("watcher starting", zap.Strings("roots", w.roots), zap.Strings("extensions", w.extensions), zap.Bool("recursive", w.recursive))
+	}
 	for _, root := range w.roots {
 		if err := w.addRootLocked(root); err != nil {
 			_ = w.watcher.Close()
@@ -93,9 +111,8 @@ func (w *Watcher) run(ctx context.Context) {
 			if !ok {
 				return
 			}
-			if err != nil {
-				// Log in caller; we have no logger here
-				_ = err
+			if err != nil && w.logger != nil {
+				w.logger.Debug("watcher error", zap.Error(err))
 			}
 		}
 	}
@@ -105,6 +122,9 @@ func (w *Watcher) handleEvent(ev fsnotify.Event) {
 	path := ev.Name
 	if !w.underRoot(path) {
 		return
+	}
+	if w.logger != nil {
+		w.logger.Debug("watcher event", zap.String("op", ev.Op.String()), zap.String("path", path))
 	}
 	switch ev.Op {
 	case fsnotify.Create, fsnotify.Write:
@@ -171,7 +191,11 @@ func (w *Watcher) debounceIndex(path string) {
 	t := time.AfterFunc(w.debounce, func() {
 		w.mu.Lock()
 		delete(w.debounceMap, path)
+		logger := w.logger
 		w.mu.Unlock()
+		if logger != nil {
+			logger.Debug("watcher indexing file (debounced)", zap.String("path", path))
+		}
 		if w.onIndex != nil {
 			w.onIndex(path)
 		}
@@ -208,6 +232,9 @@ func (w *Watcher) AddDirectory(root string, syncExisting bool) error {
 		return err
 	}
 	w.roots = append(w.roots, abs)
+	if w.logger != nil {
+		w.logger.Debug("watcher directory added", zap.String("path", abs), zap.Bool("sync_existing", syncExisting))
+	}
 	if syncExisting && w.onIndex != nil {
 		go w.syncDirectory(abs)
 	}
@@ -260,12 +287,19 @@ func (w *Watcher) syncDirectory(root string) {
 	w.mu.Lock()
 	exts := append([]string(nil), w.extensions...)
 	onIndex := w.onIndex
+	logger := w.logger
 	w.mu.Unlock()
+	if logger != nil {
+		logger.Debug("watcher syncing directory", zap.String("root", root))
+	}
 	filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
 		if matchExtension(path, exts) {
+			if logger != nil {
+				logger.Debug("watcher sync indexing file", zap.String("path", path))
+			}
 			if onIndex != nil {
 				onIndex(path)
 			}
@@ -302,6 +336,9 @@ func (w *Watcher) RemoveDirectory(root string) error {
 	}
 	delete(w.rootPaths, abs)
 	w.roots = append(w.roots[:idx], w.roots[idx+1:]...)
+	if w.logger != nil {
+		w.logger.Debug("watcher directory removed", zap.String("path", abs))
+	}
 	return nil
 }
 
@@ -318,6 +355,9 @@ func (w *Watcher) SyncExistingFiles() {
 	w.mu.Lock()
 	roots := append([]string(nil), w.roots...)
 	w.mu.Unlock()
+	if w.logger != nil {
+		w.logger.Debug("watcher syncing existing files", zap.Strings("roots", roots))
+	}
 	for _, root := range roots {
 		w.syncDirectory(root)
 	}

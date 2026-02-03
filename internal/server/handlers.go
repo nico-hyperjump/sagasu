@@ -18,6 +18,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		s.respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	s.logger.Debug("search request", zap.String("query", query.Query), zap.Int("limit", query.Limit))
 	response, err := s.engine.Search(r.Context(), &query)
 	if err != nil {
 		s.logger.Error("search failed", zap.Error(err))
@@ -33,6 +34,7 @@ func (s *Server) handleIndexDocument(w http.ResponseWriter, r *http.Request) {
 		s.respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	s.logger.Debug("index document request", zap.String("id", input.ID), zap.String("title", input.Title))
 	if err := s.indexer.IndexDocument(r.Context(), &input); err != nil {
 		s.logger.Error("indexing failed", zap.Error(err))
 		s.respondError(w, http.StatusInternalServerError, err.Error())
@@ -53,6 +55,7 @@ func (s *Server) handleGetDocument(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleDeleteDocument(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	s.logger.Debug("delete document request", zap.String("id", id))
 	if err := s.indexer.DeleteDocument(r.Context(), id); err != nil {
 		s.logger.Error("deletion failed", zap.Error(err))
 		s.respondError(w, http.StatusInternalServerError, err.Error())
@@ -115,6 +118,7 @@ func (s *Server) handleWatchDirectoriesAdd(w http.ResponseWriter, r *http.Reques
 	if req.Sync != nil {
 		syncExisting = *req.Sync
 	}
+	s.logger.Debug("watch add directory request", zap.String("path", abs), zap.Bool("sync_existing", syncExisting))
 	if err := s.watch.AddDirectory(abs, syncExisting); err != nil {
 		s.logger.Error("watch add directory failed", zap.Error(err))
 		s.respondError(w, http.StatusInternalServerError, err.Error())
@@ -155,6 +159,7 @@ func (s *Server) handleWatchDirectoriesRemove(w http.ResponseWriter, r *http.Req
 		s.respondError(w, http.StatusBadRequest, "invalid path")
 		return
 	}
+	s.logger.Debug("watch remove directory request", zap.String("path", abs))
 	if err := s.watch.RemoveDirectory(abs); err != nil {
 		s.logger.Error("watch remove directory failed", zap.Error(err))
 		s.respondError(w, http.StatusInternalServerError, err.Error())

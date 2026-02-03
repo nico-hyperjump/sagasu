@@ -9,18 +9,20 @@ Command-line interface for Sagasu.
 Start the HTTP API server.
 
 ```bash
-sagasu server [--config PATH]
+sagasu server [--config PATH] [--debug]
 ```
 
-| Flag     | Default                           | Description       |
-| -------- | --------------------------------- | ----------------- |
-| --config | /usr/local/etc/sagasu/config.yaml | Config file path. |
+| Flag     | Default                           | Description                                                    |
+| -------- | --------------------------------- | -------------------------------------------------------------- |
+| --config | /usr/local/etc/sagasu/config.yaml | Config file path.                                              |
+| --debug  | false                             | Enable debug logging (directory changes, file indexing, etc.). |
 
 **Example:**
 
 ```bash
 sagasu server
 sagasu server --config ./config.yaml
+sagasu server --debug
 ```
 
 ---

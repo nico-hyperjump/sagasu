@@ -30,6 +30,7 @@ import (
 	"github.com/hyperjump/sagasu/internal/storage"
 	"github.com/hyperjump/sagasu/internal/vector"
 	"github.com/hyperjump/sagasu/internal/watcher"
+	"github.com/hyperjump/sagasu/pkg/utils"
 	"go.uber.org/zap"
 )
 
@@ -93,6 +94,7 @@ func main() {
 func runServer() {
 	fs := flag.NewFlagSet("server", flag.ExitOnError)
 	configPath := fs.String("config", defaultConfigPath, "config file path")
+	debug := fs.Bool("debug", false, "enable debug logging (directory changes, file indexing, etc.)")
 	_ = fs.Parse(os.Args[2:])
 
 	cfg, resolvedConfigPath, err := loadConfig(*configPath)
@@ -100,10 +102,15 @@ func runServer() {
 		fmt.Printf("Failed to load config: %v\n", err)
 		os.Exit(1)
 	}
-	logger, _ := zap.NewProduction()
+	debugMode := cfg.Debug || *debug
+	logger, err := utils.NewLogger(debugMode)
+	if err != nil {
+		fmt.Printf("Failed to create logger: %v\n", err)
+		os.Exit(1)
+	}
 	defer logger.Sync()
 
-	components, err := initializeComponents(cfg, logger)
+	components, err := initializeComponents(cfg, logger, debugMode)
 	if err != nil {
 		logger.Fatal("Failed to initialize components", zap.Error(err))
 	}
@@ -111,6 +118,10 @@ func runServer() {
 
 	idx := components.Indexer
 	exts := cfg.Watch.Extensions
+	watchOpts := []watcher.WatcherOption{}
+	if debugMode {
+		watchOpts = append(watchOpts, watcher.WithLogger(logger))
+	}
 	watchSvc := watcher.NewWatcher(
 		cfg.Watch.Directories,
 		exts,
@@ -125,6 +136,7 @@ func runServer() {
 				logger.Warn("watch delete by path failed", zap.String("path", path), zap.Error(err))
 			}
 		},
+		watchOpts...,
 	)
 	watchCtx, watchCancel := context.WithCancel(context.Background())
 	defer watchCancel()
@@ -221,10 +233,15 @@ func runSearch() {
 		fmt.Printf("Failed to load config: %v\n", err)
 		os.Exit(1)
 	}
-	logger, _ := zap.NewProduction()
+	debugMode := cfg.Debug
+	logger, err := utils.NewLogger(debugMode)
+	if err != nil {
+		fmt.Printf("Failed to create logger: %v\n", err)
+		os.Exit(1)
+	}
 	defer logger.Sync()
 
-	components, err := initializeComponents(cfg, logger)
+	components, err := initializeComponents(cfg, logger, debugMode)
 	if err != nil {
 		logger.Fatal("Failed to initialize", zap.Error(err))
 	}
@@ -276,10 +293,15 @@ func runIndex() {
 		fmt.Printf("Failed to load config: %v\n", err)
 		os.Exit(1)
 	}
-	logger, _ := zap.NewProduction()
+	debugMode := cfg.Debug
+	logger, err := utils.NewLogger(debugMode)
+	if err != nil {
+		fmt.Printf("Failed to create logger: %v\n", err)
+		os.Exit(1)
+	}
 	defer logger.Sync()
 
-	components, err := initializeComponents(cfg, logger)
+	components, err := initializeComponents(cfg, logger, debugMode)
 	if err != nil {
 		logger.Fatal("Failed to initialize", zap.Error(err))
 	}
@@ -390,10 +412,15 @@ func runDelete() {
 		fmt.Printf("Failed to load config: %v\n", err)
 		os.Exit(1)
 	}
-	logger, _ := zap.NewProduction()
+	debugMode := cfg.Debug
+	logger, err := utils.NewLogger(debugMode)
+	if err != nil {
+		fmt.Printf("Failed to create logger: %v\n", err)
+		os.Exit(1)
+	}
 	defer logger.Sync()
 
-	components, err := initializeComponents(cfg, logger)
+	components, err := initializeComponents(cfg, logger, debugMode)
 	if err != nil {
 		logger.Fatal("Failed to initialize", zap.Error(err))
 	}
@@ -431,7 +458,7 @@ func (c *Components) Close() {
 	}
 }
 
-func initializeComponents(cfg *config.Config, logger *zap.Logger) (*Components, error) {
+func initializeComponents(cfg *config.Config, logger *zap.Logger, debug bool) (*Components, error) {
 	store, err := storage.NewSQLiteStorage(cfg.Storage.DatabasePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize storage: %w", err)
@@ -461,7 +488,11 @@ func initializeComponents(cfg *config.Config, logger *zap.Logger) (*Components, 
 	}
 
 	engine := search.NewEngine(store, embedder, vectorIndex, keywordIndex, &cfg.Search)
-	idx := indexer.NewIndexer(store, embedder, vectorIndex, keywordIndex, &cfg.Search, extract.NewExtractor())
+	idxOpts := []indexer.IndexerOption{}
+	if debug && logger != nil {
+		idxOpts = append(idxOpts, indexer.WithLogger(logger))
+	}
+	idx := indexer.NewIndexer(store, embedder, vectorIndex, keywordIndex, &cfg.Search, extract.NewExtractor(), idxOpts...)
 
 	return &Components{
 		Storage:      store,
@@ -487,6 +518,7 @@ Usage:
 
 Server Flags:
   --config string    Config file path (default: /usr/local/etc/sagasu/config.yaml)
+  --debug            Enable debug logging (directory changes, file indexing, etc.)
 
 Search Flags:
   --config string           Config file path (for direct storage mode)

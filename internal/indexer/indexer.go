@@ -17,6 +17,7 @@ import (
 	"github.com/hyperjump/sagasu/internal/models"
 	"github.com/hyperjump/sagasu/internal/storage"
 	"github.com/hyperjump/sagasu/internal/vector"
+	"go.uber.org/zap"
 )
 
 // Indexer indexes documents into storage, keyword index, and vector index.
@@ -28,10 +29,20 @@ type Indexer struct {
 	chunker      *Chunker
 	config       *config.SearchConfig
 	extractor    *extract.Extractor
+	logger       *zap.Logger // optional; when set, logs debug events
+}
+
+// IndexerOption configures an Indexer.
+type IndexerOption func(*Indexer)
+
+// WithLogger sets a logger for debug output (file indexed, document deleted, etc.).
+func WithLogger(l *zap.Logger) IndexerOption {
+	return func(idx *Indexer) { idx.logger = l }
 }
 
 // NewIndexer creates an indexer with the given dependencies.
 // extractor may be nil; when nil, IndexFile treats all files as plain text.
+// Options (e.g. WithLogger) can be passed for debug logging.
 func NewIndexer(
 	storage storage.Storage,
 	embedder embedding.Embedder,
@@ -39,8 +50,9 @@ func NewIndexer(
 	keywordIndex keyword.KeywordIndex,
 	cfg *config.SearchConfig,
 	extractor *extract.Extractor,
+	opts ...IndexerOption,
 ) *Indexer {
-	return &Indexer{
+	idx := &Indexer{
 		storage:      storage,
 		embedder:     embedder,
 		vectorIndex:  vectorIndex,
@@ -49,6 +61,10 @@ func NewIndexer(
 		config:       cfg,
 		extractor:    extractor,
 	}
+	for _, opt := range opts {
+		opt(idx)
+	}
+	return idx
 }
 
 // IndexDocument indexes a document: store, chunk, embed, index in vector and keyword.
@@ -106,6 +122,9 @@ func (idx *Indexer) IndexDocument(ctx context.Context, input *models.DocumentInp
 // non-empty, the file's extension must be in the list (case-insensitive). Returns an error
 // if the path is not a regular file, cannot be read, or indexing fails.
 func (idx *Indexer) IndexFile(ctx context.Context, path string, allowedExts []string) error {
+	if idx.logger != nil {
+		idx.logger.Debug("indexer indexing file", zap.String("path", path))
+	}
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return fmt.Errorf("absolute path: %w", err)
@@ -133,7 +152,13 @@ func (idx *Indexer) IndexFile(ctx context.Context, path string, allowedExts []st
 		Content:  text,
 		Metadata: map[string]interface{}{"source_path": absPath},
 	}
-	return idx.IndexDocument(ctx, input)
+	if err := idx.IndexDocument(ctx, input); err != nil {
+		return err
+	}
+	if idx.logger != nil {
+		idx.logger.Debug("indexer file indexed", zap.String("path", absPath), zap.String("doc_id", docID))
+	}
+	return nil
 }
 
 func (idx *Indexer) extractContent(path string) (string, error) {
@@ -159,6 +184,9 @@ func extensionAllowed(ext string, allowed []string) bool {
 
 // DeleteDocument removes a document from all indices and storage.
 func (idx *Indexer) DeleteDocument(ctx context.Context, id string) error {
+	if idx.logger != nil {
+		idx.logger.Debug("indexer deleting document", zap.String("id", id))
+	}
 	if err := idx.keywordIndex.Delete(ctx, id); err != nil {
 		return fmt.Errorf("failed to delete from keyword index: %w", err)
 	}
@@ -178,6 +206,9 @@ func (idx *Indexer) DeleteDocument(ctx context.Context, id string) error {
 	}
 	if err := idx.storage.DeleteDocument(ctx, id); err != nil {
 		return fmt.Errorf("failed to delete document: %w", err)
+	}
+	if idx.logger != nil {
+		idx.logger.Debug("indexer document deleted", zap.String("id", id))
 	}
 	return nil
 }

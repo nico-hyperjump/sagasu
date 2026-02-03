@@ -1,3 +1,6 @@
+# Set to true for verbose debug logging (directory changes, file indexing, etc.)
+debug: false
+
 server:
   host: "localhost"
   port: 8080
