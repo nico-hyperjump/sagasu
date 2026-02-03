@@ -76,9 +76,11 @@ curl -X POST http://localhost:8080/api/v1/documents \
 
 ### Search
 
+Results are returned in two lists: keyword matches and semantic-only matches. Use `--keyword=false` for semantic-only search, or `--semantic=false` for keyword-only.
+
 ```bash
 sagasu search "machine learning algorithms"
-sagasu search --keyword-weight 0.7 --semantic-weight 0.3 "neural networks"
+sagasu search --keyword=false "neural networks"   # semantic-only
 ```
 
 Or via HTTP:

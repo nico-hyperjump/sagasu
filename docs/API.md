@@ -17,24 +17,24 @@ Run a hybrid (keyword + semantic) search.
   "query": "machine learning",
   "limit": 10,
   "offset": 0,
-  "keyword_weight": 0.5,
-  "semantic_weight": 0.5,
+  "keyword_enabled": true,
+  "semantic_enabled": true,
   "min_score": 0.0
 }
 ```
 
-| Field           | Type   | Description                        |
-| --------------- | ------ | ---------------------------------- |
-| query           | string | Required. Search query text.       |
-| limit           | int    | Max results (default 10, max 100). |
-| offset          | int    | Pagination offset (default 0).     |
-| keyword_weight  | float  | Weight for keyword score (0–1).    |
-| semantic_weight | float  | Weight for semantic score (0–1).   |
-| min_score       | float  | Minimum fused score to include.    |
+| Field            | Type   | Description                                                                           |
+| ---------------- | ------ | ------------------------------------------------------------------------------------- |
+| query            | string | Required. Search query text.                                                          |
+| limit            | int    | Max results (default 10, max 100).                                                    |
+| offset           | int    | Pagination offset (default 0).                                                        |
+| keyword_enabled  | bool   | Run keyword search (default true). Omitted = false; if both false, both are enabled.  |
+| semantic_enabled | bool   | Run semantic search (default true). Omitted = false; if both false, both are enabled. |
+| min_score        | float  | Minimum score to include (applied to each result list).                               |
 
 **Response (200):**
 
-Results are split into two disjoint lists: `non_semantic_results` (keyword-only) and `semantic_results` (semantic-only). No document appears in both.
+Results are split into two disjoint lists: `non_semantic_results` (keyword matches) and `semantic_results` (semantic-only matches; documents that did not match by keyword). No document appears in both. `keyword_enabled` and `semantic_enabled` control which search runs; they do not affect ranking within each list.
 
 ```json
 {

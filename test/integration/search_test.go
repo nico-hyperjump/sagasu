@@ -27,7 +27,7 @@ func TestIntegration_Search(t *testing.T) {
 		Embedding: config.EmbeddingConfig{Dimensions: 4, MaxTokens: 32, CacheSize: 100},
 		Search: config.SearchConfig{
 			ChunkSize: 10, ChunkOverlap: 2, TopKCandidates: 20,
-			DefaultKeywordWeight: 0.5, DefaultSemanticWeight: 0.5,
+			DefaultKeywordEnabled: true, DefaultSemanticEnabled: true,
 		},
 	}
 
@@ -68,7 +68,7 @@ func TestIntegration_Search(t *testing.T) {
 	}
 
 	resp, err := engine.Search(ctx, &models.SearchQuery{
-		Query: "machine learning", Limit: 5, KeywordWeight: 0.5, SemanticWeight: 0.5,
+		Query: "machine learning", Limit: 5, KeywordEnabled: true, SemanticEnabled: true,
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -29,21 +29,21 @@ sagasu server --debug
 
 ### search
 
-Run a hybrid search from the command line.
+Run a hybrid search from the command line. Results are returned in two lists: **keyword matches** (exact term matches) and **semantic-only matches** (meaning-based; documents that did not match by keyword). Use `--keyword=false` for semantic-only, or `--semantic=false` for keyword-only.
 
 ```bash
 sagasu search [flags] <query>
 ```
 
-| Flag              | Default               | Description                                                                                       |
-| ----------------- | --------------------- | ------------------------------------------------------------------------------------------------- |
-| --config          | (see server)          | Config file path.                                                                                 |
-| --server          | http://localhost:8080 | Server URL. Use `--server ""` to use direct storage (config DB/Bleve) when server is not running. |
-| --limit           | 10                    | Number of results.                                                                                |
-| --min-score       | 0.05                  | Minimum score threshold.                                                                          |
-| --keyword-weight  | 0.5                   | Keyword score weight.                                                                             |
-| --semantic-weight | 0.5                   | Semantic score weight.                                                                            |
-| --output          | text                  | Output format: `text` (human-readable) or `json` (structured, parseable for other apps).          |
+| Flag        | Default               | Description                                                                                       |
+| ----------- | --------------------- | ------------------------------------------------------------------------------------------------- |
+| --config    | (see server)          | Config file path.                                                                                 |
+| --server    | http://localhost:8080 | Server URL. Use `--server ""` to use direct storage (config DB/Bleve) when server is not running. |
+| --limit     | 10                    | Number of results.                                                                                |
+| --min-score | 0.05                  | Minimum score threshold.                                                                          |
+| --keyword   | true                  | Enable keyword search.                                                                            |
+| --semantic  | true                  | Enable semantic search.                                                                           |
+| --output    | text                  | Output format: `text` (human-readable) or `json` (structured, parseable for other apps).          |
 
 **Examples:**
 
@@ -51,7 +51,8 @@ sagasu search [flags] <query>
 sagasu search "machine learning algorithms"
 sagasu search --limit 20 "neural networks"
 sagasu search --min-score 0.1 "raosan"
-sagasu search --keyword-weight 0.7 --semantic-weight 0.3 "search engine"
+sagasu search --keyword=false "meaning-based only"   # semantic-only
+sagasu search --semantic=false "exact terms"         # keyword-only
 sagasu search --output json "query"   # JSON output for piping to jq or other tools
 ```
 

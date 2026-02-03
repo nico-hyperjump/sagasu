@@ -1,4 +1,4 @@
-// Package search provides hybrid search (keyword + semantic) and result fusion.
+// Package search provides hybrid search (keyword + semantic) with split results.
 package search
 
 import (
@@ -8,7 +8,7 @@ import (
 	"github.com/hyperjump/sagasu/internal/vector"
 )
 
-// FusedResult holds a document ID and fused keyword/semantic scores.
+// FusedResult holds a document ID and keyword/semantic scores for split result lists.
 type FusedResult struct {
 	DocumentID    string
 	Score         float64
@@ -61,34 +61,6 @@ func AggregateSemanticByDocument(chunkToDoc map[string]string, semanticScores ma
 		}
 	}
 	return byDoc
-}
-
-// Fuse merges keyword and semantic score maps with weights and returns sorted FusedResults.
-func Fuse(keywordScores, semanticScores map[string]float64, keywordWeight, semanticWeight float64) []*FusedResult {
-	scoreMap := make(map[string]*FusedResult)
-	for id, score := range keywordScores {
-		scoreMap[id] = &FusedResult{
-			DocumentID:   id,
-			KeywordScore: score,
-		}
-	}
-	for id, score := range semanticScores {
-		if result, exists := scoreMap[id]; exists {
-			result.SemanticScore = score
-		} else {
-			scoreMap[id] = &FusedResult{
-				DocumentID:    id,
-				SemanticScore: score,
-			}
-		}
-	}
-	results := make([]*FusedResult, 0, len(scoreMap))
-	for _, result := range scoreMap {
-		result.Score = (keywordWeight * result.KeywordScore) + (semanticWeight * result.SemanticScore)
-		results = append(results, result)
-	}
-	sort.Slice(results, func(i, j int) bool { return results[i].Score > results[j].Score })
-	return results
 }
 
 // SplitBySource splits keyword and semantic score maps into two disjoint result lists:

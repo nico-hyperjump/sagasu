@@ -5,23 +5,8 @@ import (
 	"testing"
 
 	"github.com/hyperjump/sagasu/internal/embedding"
-	"github.com/hyperjump/sagasu/internal/search"
 	"github.com/hyperjump/sagasu/internal/vector"
 )
-
-func BenchmarkFuse(b *testing.B) {
-	kw := make(map[string]float64)
-	sem := make(map[string]float64)
-	for i := 0; i < 100; i++ {
-		id := string(rune('a' + i%26))
-		kw[id] = float64(i) / 100
-		sem[id] = float64(100-i) / 100
-	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = search.Fuse(kw, sem, 0.5, 0.5)
-	}
-}
 
 func BenchmarkMemoryIndexSearch(b *testing.B) {
 	idx, _ := vector.NewMemoryIndex(384)

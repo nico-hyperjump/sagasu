@@ -14,7 +14,7 @@ func TestSearchQuery_Validate(t *testing.T) {
 		{"valid query", &SearchQuery{Query: "hello"}, false},
 		{"sets default limit", &SearchQuery{Query: "x", Limit: 0}, false},
 		{"caps limit at 100", &SearchQuery{Query: "x", Limit: 200}, false},
-		{"sets default weights", &SearchQuery{Query: "x", KeywordWeight: 0, SemanticWeight: 0}, false},
+		{"enables both when both false", &SearchQuery{Query: "x", KeywordEnabled: false, SemanticEnabled: false}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -28,6 +28,9 @@ func TestSearchQuery_Validate(t *testing.T) {
 				}
 				if tt.query.Limit > 100 {
 					t.Errorf("expected limit capped at 100, got %d", tt.query.Limit)
+				}
+				if tt.name == "enables both when both false" && (!tt.query.KeywordEnabled || !tt.query.SemanticEnabled) {
+					t.Error("expected both keyword and semantic enabled when both were false")
 				}
 			}
 		})

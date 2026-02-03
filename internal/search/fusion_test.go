@@ -48,18 +48,6 @@ func TestAggregateSemanticByDocument(t *testing.T) {
 	}
 }
 
-func TestFuse(t *testing.T) {
-	kw := map[string]float64{"d1": 1.0, "d2": 0.5}
-	sem := map[string]float64{"d1": 0.5, "d2": 1.0}
-	results := Fuse(kw, sem, 0.5, 0.5)
-	if len(results) != 2 {
-		t.Fatalf("expected 2 results, got %d", len(results))
-	}
-	if results[0].Score < results[1].Score {
-		t.Error("results should be sorted by score descending")
-	}
-}
-
 func TestSplitBySource(t *testing.T) {
 	kw := map[string]float64{"d1": 1.0, "d2": 0.5, "d3": 0.3}
 	semScores := map[string]float64{"d1": 0.8, "d4": 0.9, "d5": 0.2}

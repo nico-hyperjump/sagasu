@@ -39,7 +39,7 @@ func TestEngine_Search(t *testing.T) {
 
 	cfg := &config.SearchConfig{
 		TopKCandidates: 20, ChunkSize: 50, ChunkOverlap: 10,
-		DefaultKeywordWeight: 0.5, DefaultSemanticWeight: 0.5,
+		DefaultKeywordEnabled: true, DefaultSemanticEnabled: true,
 	}
 	engine := NewEngine(store, emb, vecIndex, kwIndex, cfg)
 	idx := indexer.NewIndexer(store, emb, vecIndex, kwIndex, cfg, nil)
@@ -51,7 +51,7 @@ func TestEngine_Search(t *testing.T) {
 	}
 
 	resp, err := engine.Search(ctx, &models.SearchQuery{
-		Query: "machine learning", Limit: 5, KeywordWeight: 0.5, SemanticWeight: 0.5,
+		Query: "machine learning", Limit: 5, KeywordEnabled: true, SemanticEnabled: true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -88,7 +88,7 @@ func TestEngine_VectorIndexSize(t *testing.T) {
 
 	cfg := &config.SearchConfig{
 		TopKCandidates: 20, ChunkSize: 50, ChunkOverlap: 10,
-		DefaultKeywordWeight: 0.5, DefaultSemanticWeight: 0.5,
+		DefaultKeywordEnabled: true, DefaultSemanticEnabled: true,
 	}
 	engine := NewEngine(store, emb, vecIndex, kwIndex, cfg)
 	idx := indexer.NewIndexer(store, emb, vecIndex, kwIndex, cfg, nil)

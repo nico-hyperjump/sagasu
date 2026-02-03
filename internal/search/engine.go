@@ -55,7 +55,7 @@ func (e *Engine) Search(ctx context.Context, query *models.SearchQuery) (*models
 		wg              sync.WaitGroup
 	)
 
-	if query.KeywordWeight > 0 {
+	if query.KeywordEnabled {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -68,7 +68,7 @@ func (e *Engine) Search(ctx context.Context, query *models.SearchQuery) (*models
 		}()
 	}
 
-	if query.SemanticWeight > 0 {
+	if query.SemanticEnabled {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

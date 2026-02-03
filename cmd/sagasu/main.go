@@ -182,16 +182,14 @@ func printSearchUsage(fs *flag.FlagSet) {
 	fmt.Fprintf(fs.Output(), "Usage: sagasu search [flags] <query>\n\n")
 	fs.PrintDefaults()
 	fmt.Fprintf(fs.Output(), `
-Search tips (efficient queries):
-  • Multi-word: Query is tokenized; documents matching more terms rank higher.
-  • Keyword vs semantic: Increase --keyword-weight for exact term matches;
-    increase --semantic-weight for meaning-based matches.
-  • Narrow results: Raise --min-score to filter low-relevance hits.
-  • More results: Use --limit to get more candidates (e.g. --limit 20).
+Results are split into two lists: keyword matches and semantic-only matches.
+  • Use --keyword=false for semantic-only search.
+  • Use --semantic=false for keyword-only search.
+  • --min-score filters low-relevance hits; --limit controls how many per list.
 
 Examples:
   sagasu search "machine learning"
-  sagasu search --keyword-weight 0.7 "neural networks"
+  sagasu search --keyword=false "neural networks"   # semantic-only
   sagasu search --min-score 0.1 --limit 20 "your query"
 `)
 }
@@ -221,8 +219,8 @@ func runSearch() {
 	serverURL := fs.String("server", "http://localhost:8080", "server URL (empty = use direct storage when server is not running)")
 	limit := fs.Int("limit", 10, "number of results")
 	minScore := fs.Float64("min-score", 0.05, "minimum score threshold (exclude results below)")
-	kwWeight := fs.Float64("keyword-weight", 0.5, "keyword weight")
-	semWeight := fs.Float64("semantic-weight", 0.5, "semantic weight")
+	kwEnabled := fs.Bool("keyword", true, "enable keyword search")
+	semEnabled := fs.Bool("semantic", true, "enable semantic search")
 	outputFormat := fs.String("output", "text", "output format: text (human-readable), compact (one result per line), or json (parseable)")
 	fs.Usage = func() { printSearchUsage(fs) }
 	searchArgs := searchArgsReorder(os.Args[2:])
@@ -248,11 +246,11 @@ func runSearch() {
 	}
 
 	searchQuery := &models.SearchQuery{
-		Query:          queryStr,
-		Limit:          *limit,
-		MinScore:       *minScore,
-		KeywordWeight:  *kwWeight,
-		SemanticWeight: *semWeight,
+		Query:           queryStr,
+		Limit:           *limit,
+		MinScore:        *minScore,
+		KeywordEnabled:  *kwEnabled,
+		SemanticEnabled: *semEnabled,
 	}
 
 	if *serverURL != "" {
@@ -690,10 +688,10 @@ Server Flags:
 Search Flags:
   --config string           Config file path (for direct storage mode)
   --server string           Server URL (default: http://localhost:8080). Use empty (--server "") to use direct storage when server is not running.
-  --limit int               Number of results (default: 10)
+  --limit int               Number of results per list (default: 10)
   --min-score float         Minimum score threshold (default: 0.05)
-  --keyword-weight float    Keyword weight (default: 0.5)
-  --semantic-weight float   Semantic weight (default: 0.5)
+  --keyword                 Enable keyword search (default: true)
+  --semantic                Enable semantic search (default: true)
 
 Index Flags:
   --config string    Config file path
@@ -712,7 +710,7 @@ Examples:
   sagasu search "machine learning algorithms"
   sagasu search --min-score 0.1 "raosan"
   sagasu search --output json "query"   # structured JSON for other apps
-  sagasu search --keyword-weight 0.7 --semantic-weight 0.3 "neural networks"
+  sagasu search --keyword=false "neural networks"   # semantic-only
   sagasu index --title "My Document" document.txt
   sagasu delete doc-123
   sagasu status

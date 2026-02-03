@@ -41,7 +41,7 @@ func testIndexerWithStorage(t *testing.T, dir string) (*Indexer, storage.Storage
 	t.Helper()
 	cfg := &config.SearchConfig{
 		ChunkSize: 10, ChunkOverlap: 2, TopKCandidates: 20,
-		DefaultKeywordWeight: 0.5, DefaultSemanticWeight: 0.5,
+		DefaultKeywordEnabled: true, DefaultSemanticEnabled: true,
 	}
 	store, err := storage.NewSQLiteStorage(filepath.Join(dir, "db.sqlite"))
 	if err != nil {
@@ -175,7 +175,7 @@ func TestIndexFile_excelWithExtractor(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &config.SearchConfig{
 		ChunkSize: 10, ChunkOverlap: 2, TopKCandidates: 20,
-		DefaultKeywordWeight: 0.5, DefaultSemanticWeight: 0.5,
+		DefaultKeywordEnabled: true, DefaultSemanticEnabled: true,
 	}
 	store, err := storage.NewSQLiteStorage(filepath.Join(dir, "db.sqlite"))
 	if err != nil {

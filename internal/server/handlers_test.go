@@ -58,7 +58,7 @@ func TestHandleWatchDirectoriesList(t *testing.T) {
 	kwIdx, _ := keyword.NewBleveIndex(dir + "/bleve")
 	defer kwIdx.Close()
 	cfg := &config.SearchConfig{ChunkSize: 10, ChunkOverlap: 2, TopKCandidates: 20,
-		DefaultKeywordWeight: 0.5, DefaultSemanticWeight: 0.5}
+		DefaultKeywordEnabled: true, DefaultSemanticEnabled: true}
 	engine := search.NewEngine(store, embedder, vecIdx, kwIdx, cfg)
 	idx := indexer.NewIndexer(store, embedder, vecIdx, kwIdx, cfg, nil)
 	logger := zap.NewNop()
@@ -94,7 +94,7 @@ func TestHandleWatchDirectoriesList_NotEnabled(t *testing.T) {
 	kwIdx, _ := keyword.NewBleveIndex(dir + "/bleve")
 	defer kwIdx.Close()
 	cfg := &config.SearchConfig{ChunkSize: 10, ChunkOverlap: 2, TopKCandidates: 20,
-		DefaultKeywordWeight: 0.5, DefaultSemanticWeight: 0.5}
+		DefaultKeywordEnabled: true, DefaultSemanticEnabled: true}
 	engine := search.NewEngine(store, embedder, vecIdx, kwIdx, cfg)
 	idx := indexer.NewIndexer(store, embedder, vecIdx, kwIdx, cfg, nil)
 	logger := zap.NewNop()
@@ -119,7 +119,7 @@ func TestHandleWatchDirectoriesAdd(t *testing.T) {
 	kwIdx, _ := keyword.NewBleveIndex(dir + "/bleve")
 	defer kwIdx.Close()
 	cfg := &config.SearchConfig{ChunkSize: 10, ChunkOverlap: 2, TopKCandidates: 20,
-		DefaultKeywordWeight: 0.5, DefaultSemanticWeight: 0.5}
+		DefaultKeywordEnabled: true, DefaultSemanticEnabled: true}
 	engine := search.NewEngine(store, embedder, vecIdx, kwIdx, cfg)
 	idx := indexer.NewIndexer(store, embedder, vecIdx, kwIdx, cfg, nil)
 	logger := zap.NewNop()
@@ -151,7 +151,7 @@ func TestHandleWatchDirectoriesAdd_InvalidPath(t *testing.T) {
 	kwIdx, _ := keyword.NewBleveIndex(dir + "/bleve")
 	defer kwIdx.Close()
 	cfg := &config.SearchConfig{ChunkSize: 10, ChunkOverlap: 2, TopKCandidates: 20,
-		DefaultKeywordWeight: 0.5, DefaultSemanticWeight: 0.5}
+		DefaultKeywordEnabled: true, DefaultSemanticEnabled: true}
 	engine := search.NewEngine(store, embedder, vecIdx, kwIdx, cfg)
 	idx := indexer.NewIndexer(store, embedder, vecIdx, kwIdx, cfg, nil)
 	logger := zap.NewNop()
@@ -180,7 +180,7 @@ func TestHandleWatchDirectoriesRemove(t *testing.T) {
 	kwIdx, _ := keyword.NewBleveIndex(dir + "/bleve")
 	defer kwIdx.Close()
 	cfg := &config.SearchConfig{ChunkSize: 10, ChunkOverlap: 2, TopKCandidates: 20,
-		DefaultKeywordWeight: 0.5, DefaultSemanticWeight: 0.5}
+		DefaultKeywordEnabled: true, DefaultSemanticEnabled: true}
 	engine := search.NewEngine(store, embedder, vecIdx, kwIdx, cfg)
 	idx := indexer.NewIndexer(store, embedder, vecIdx, kwIdx, cfg, nil)
 	logger := zap.NewNop()
@@ -210,7 +210,7 @@ func TestHandleSearch(t *testing.T) {
 	kwIdx, _ := keyword.NewBleveIndex(dir + "/bleve")
 	defer kwIdx.Close()
 	cfg := &config.SearchConfig{ChunkSize: 10, ChunkOverlap: 2, TopKCandidates: 20,
-		DefaultKeywordWeight: 0.5, DefaultSemanticWeight: 0.5}
+		DefaultKeywordEnabled: true, DefaultSemanticEnabled: true}
 	engine := search.NewEngine(store, embedder, vecIdx, kwIdx, cfg)
 	idx := indexer.NewIndexer(store, embedder, vecIdx, kwIdx, cfg, nil)
 	_ = idx.IndexDocument(context.Background(), &models.DocumentInput{ID: "d1", Title: "T", Content: "hello world"})
@@ -238,7 +238,7 @@ func TestHandleStatus(t *testing.T) {
 	kwIdx, _ := keyword.NewBleveIndex(dir + "/bleve")
 	defer kwIdx.Close()
 	cfg := &config.SearchConfig{ChunkSize: 10, ChunkOverlap: 2, TopKCandidates: 20,
-		DefaultKeywordWeight: 0.5, DefaultSemanticWeight: 0.5}
+		DefaultKeywordEnabled: true, DefaultSemanticEnabled: true}
 	engine := search.NewEngine(store, embedder, vecIdx, kwIdx, cfg)
 	idx := indexer.NewIndexer(store, embedder, vecIdx, kwIdx, cfg, nil)
 	_ = idx.IndexDocument(context.Background(), &models.DocumentInput{ID: "d1", Title: "T", Content: "hello world"})
@@ -281,7 +281,7 @@ func TestHandleStatus_WithDiskUsage(t *testing.T) {
 	kwIdx, _ := keyword.NewBleveIndex(dir + "/bleve")
 	defer kwIdx.Close()
 	cfg := &config.SearchConfig{ChunkSize: 10, ChunkOverlap: 2, TopKCandidates: 20,
-		DefaultKeywordWeight: 0.5, DefaultSemanticWeight: 0.5}
+		DefaultKeywordEnabled: true, DefaultSemanticEnabled: true}
 	engine := search.NewEngine(store, embedder, vecIdx, kwIdx, cfg)
 	idx := indexer.NewIndexer(store, embedder, vecIdx, kwIdx, cfg, nil)
 	_ = idx.IndexDocument(context.Background(), &models.DocumentInput{ID: "d1", Title: "T", Content: "hello world"})

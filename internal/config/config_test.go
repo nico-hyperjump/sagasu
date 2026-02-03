@@ -101,6 +101,10 @@ func TestApplyDefaults(t *testing.T) {
 	if cfg.Search.DefaultLimit != 10 {
 		t.Errorf("default limit: got %d", cfg.Search.DefaultLimit)
 	}
+	if !cfg.Search.DefaultKeywordEnabled || !cfg.Search.DefaultSemanticEnabled {
+		t.Errorf("when both search enabled flags are false, both should default to true; got keyword=%v semantic=%v",
+			cfg.Search.DefaultKeywordEnabled, cfg.Search.DefaultSemanticEnabled)
+	}
 	if cfg.Watch.Extensions == nil {
 		t.Error("watch extensions should be set by default")
 	}

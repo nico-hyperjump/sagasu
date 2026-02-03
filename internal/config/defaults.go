@@ -35,9 +35,9 @@ func ApplyDefaults(cfg *Config) {
 	if cfg.Search.MaxLimit == 0 {
 		cfg.Search.MaxLimit = 100
 	}
-	if cfg.Search.DefaultKeywordWeight == 0 && cfg.Search.DefaultSemanticWeight == 0 {
-		cfg.Search.DefaultKeywordWeight = 0.5
-		cfg.Search.DefaultSemanticWeight = 0.5
+	if !cfg.Search.DefaultKeywordEnabled && !cfg.Search.DefaultSemanticEnabled {
+		cfg.Search.DefaultKeywordEnabled = true
+		cfg.Search.DefaultSemanticEnabled = true
 	}
 	if cfg.Search.ChunkSize == 0 {
 		cfg.Search.ChunkSize = 512

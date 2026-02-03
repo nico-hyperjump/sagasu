@@ -20,8 +20,8 @@ embedding:
 search:
   default_limit: 10
   max_limit: 100
-  default_keyword_weight: 0.5
-  default_semantic_weight: 0.5
+  default_keyword_enabled: true
+  default_semantic_enabled: true
   chunk_size: 512
   chunk_overlap: 50
   top_k_candidates: 100
