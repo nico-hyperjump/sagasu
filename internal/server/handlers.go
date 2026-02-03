@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/hyperjump/sagasu/internal/config"
 	"github.com/hyperjump/sagasu/internal/models"
+	"github.com/hyperjump/sagasu/internal/storage"
 	"go.uber.org/zap"
 )
 
@@ -66,6 +67,39 @@ func (s *Server) handleDeleteDocument(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	s.respondJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	docCount, err := s.storage.CountDocuments(ctx)
+	if err != nil {
+		s.logger.Error("status: count documents failed", zap.Error(err))
+		s.respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	chunkCount, err := s.storage.CountChunks(ctx)
+	if err != nil {
+		s.logger.Error("status: count chunks failed", zap.Error(err))
+		s.respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	vectorSize := s.engine.VectorIndexSize()
+	resp := map[string]interface{}{
+		"documents":         docCount,
+		"chunks":            chunkCount,
+		"vector_index_size": vectorSize,
+	}
+	if s.watchConfig != nil {
+		diskBytes, err := storage.DiskUsageBytes(
+			s.watchConfig.Storage.DatabasePath,
+			s.watchConfig.Storage.BleveIndexPath,
+			s.watchConfig.Storage.FAISSIndexPath,
+		)
+		if err == nil {
+			resp["disk_usage_bytes"] = diskBytes
+		}
+	}
+	s.respondJSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) handleWatchDirectoriesList(w http.ResponseWriter, r *http.Request) {

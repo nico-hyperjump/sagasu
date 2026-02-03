@@ -212,6 +212,32 @@ Remove a directory from watching. Does not delete documents already indexed from
 
 ---
 
+### GET /api/v1/status
+
+Return engine, storage, and index statistics. All numeric fields are counts unless otherwise noted.
+
+**Response (200):**
+
+```json
+{
+  "documents": 42,
+  "chunks": 150,
+  "vector_index_size": 150,
+  "disk_usage_bytes": 1048576
+}
+```
+
+| Field             | Type | Description                                                                 |
+| ----------------- | ---- | --------------------------------------------------------------------------- |
+| documents         | int  | Count of documents in storage.                                              |
+| chunks            | int  | Count of text chunks in storage.                                            |
+| vector_index_size | int  | Count of vectors in the semantic index (one per chunk).                     |
+| disk_usage_bytes  | int  | Optional. Total bytes used on disk by the database and index paths (bytes). |
+
+**Errors:** 500 (storage or count failure).
+
+---
+
 ### GET /health
 
 Health check.

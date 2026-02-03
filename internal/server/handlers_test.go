@@ -226,3 +226,94 @@ func TestHandleSearch(t *testing.T) {
 		t.Errorf("status: got %d", w.Code)
 	}
 }
+
+func TestHandleStatus(t *testing.T) {
+	dir := t.TempDir()
+	store, _ := storage.NewSQLiteStorage(dir + "/db.sqlite")
+	defer store.Close()
+	embedder := embedding.NewMockEmbedder(4)
+	defer embedder.Close()
+	vecIdx, _ := vector.NewMemoryIndex(4)
+	defer vecIdx.Close()
+	kwIdx, _ := keyword.NewBleveIndex(dir + "/bleve")
+	defer kwIdx.Close()
+	cfg := &config.SearchConfig{ChunkSize: 10, ChunkOverlap: 2, TopKCandidates: 20,
+		DefaultKeywordWeight: 0.5, DefaultSemanticWeight: 0.5}
+	engine := search.NewEngine(store, embedder, vecIdx, kwIdx, cfg)
+	idx := indexer.NewIndexer(store, embedder, vecIdx, kwIdx, cfg, nil)
+	_ = idx.IndexDocument(context.Background(), &models.DocumentInput{ID: "d1", Title: "T", Content: "hello world"})
+	logger := zap.NewNop()
+
+	srv := NewServer(engine, idx, store, &config.ServerConfig{Port: 8080}, logger, nil, "", nil)
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/status", nil)
+	w := httptest.NewRecorder()
+	srv.handleStatus(w, r)
+	if w.Code != http.StatusOK {
+		t.Errorf("status: got %d, body: %s", w.Code, w.Body.String())
+	}
+	var out struct {
+		Documents       int64 `json:"documents"`
+		Chunks          int64 `json:"chunks"`
+		VectorIndexSize int   `json:"vector_index_size"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Documents != 1 {
+		t.Errorf("documents: got %d, want 1", out.Documents)
+	}
+	if out.Chunks < 1 {
+		t.Errorf("chunks: got %d, want >= 1", out.Chunks)
+	}
+	if out.VectorIndexSize < 1 {
+		t.Errorf("vector_index_size: got %d, want >= 1", out.VectorIndexSize)
+	}
+}
+
+func TestHandleStatus_WithDiskUsage(t *testing.T) {
+	dir := t.TempDir()
+	store, _ := storage.NewSQLiteStorage(dir + "/db.sqlite")
+	defer store.Close()
+	embedder := embedding.NewMockEmbedder(4)
+	defer embedder.Close()
+	vecIdx, _ := vector.NewMemoryIndex(4)
+	defer vecIdx.Close()
+	kwIdx, _ := keyword.NewBleveIndex(dir + "/bleve")
+	defer kwIdx.Close()
+	cfg := &config.SearchConfig{ChunkSize: 10, ChunkOverlap: 2, TopKCandidates: 20,
+		DefaultKeywordWeight: 0.5, DefaultSemanticWeight: 0.5}
+	engine := search.NewEngine(store, embedder, vecIdx, kwIdx, cfg)
+	idx := indexer.NewIndexer(store, embedder, vecIdx, kwIdx, cfg, nil)
+	_ = idx.IndexDocument(context.Background(), &models.DocumentInput{ID: "d1", Title: "T", Content: "hello world"})
+	logger := zap.NewNop()
+
+	fullCfg := &config.Config{
+		Storage: config.StorageConfig{
+			DatabasePath:   dir + "/db.sqlite",
+			BleveIndexPath: dir + "/bleve",
+			FAISSIndexPath: dir + "/faiss",
+		},
+	}
+	srv := NewServer(engine, idx, store, &config.ServerConfig{Port: 8080}, logger, nil, "", fullCfg)
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/status", nil)
+	w := httptest.NewRecorder()
+	srv.handleStatus(w, r)
+	if w.Code != http.StatusOK {
+		t.Errorf("status: got %d, body: %s", w.Code, w.Body.String())
+	}
+	var out struct {
+		Documents       int64  `json:"documents"`
+		Chunks          int64  `json:"chunks"`
+		VectorIndexSize int    `json:"vector_index_size"`
+		DiskUsageBytes  *int64 `json:"disk_usage_bytes"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if out.DiskUsageBytes == nil {
+		t.Error("expected disk_usage_bytes in response when watchConfig is set")
+	}
+	if out.DiskUsageBytes != nil && *out.DiskUsageBytes < 1 {
+		t.Errorf("disk_usage_bytes: got %d, want >= 1", *out.DiskUsageBytes)
+	}
+}

@@ -79,6 +79,7 @@ func (s *Server) Start() error {
 	r.Get("/api/v1/watch/directories", s.handleWatchDirectoriesList)
 	r.Post("/api/v1/watch/directories", s.handleWatchDirectoriesAdd)
 	r.Delete("/api/v1/watch/directories", s.handleWatchDirectoriesRemove)
+	r.Get("/api/v1/status", s.handleStatus)
 	r.Get("/health", s.handleHealth)
 
 	addr := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)

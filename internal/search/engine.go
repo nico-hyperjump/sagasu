@@ -176,3 +176,8 @@ func pageResults(results []*FusedResult, offset, limit int) []*FusedResult {
 	}
 	return results[start:end]
 }
+
+// VectorIndexSize returns the number of vectors in the semantic index.
+func (e *Engine) VectorIndexSize() int {
+	return e.vectorIndex.Size()
+}

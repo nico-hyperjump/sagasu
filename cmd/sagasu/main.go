@@ -78,6 +78,8 @@ func main() {
 		runDelete()
 	case "watch":
 		runWatch()
+	case "status":
+		runStatus()
 	case "version", "--version", "-v":
 		fmt.Printf("sagasu version %s\n", version)
 	case "help", "--help", "-h":
@@ -317,6 +319,108 @@ func searchViaHTTP(serverURL string, query *models.SearchQuery) (*models.SearchR
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 	return &response, nil
+}
+
+// statusResponse is the shape of GET /api/v1/status response.
+type statusResponse struct {
+	Documents       int64  `json:"documents"`
+	Chunks          int64  `json:"chunks"`
+	VectorIndexSize int    `json:"vector_index_size"`
+	DiskUsageBytes  *int64 `json:"disk_usage_bytes,omitempty"`
+}
+
+func runStatus() {
+	fs := flag.NewFlagSet("status", flag.ExitOnError)
+	configPath := fs.String("config", defaultConfigPath, "config file path")
+	serverURL := fs.String("server", "http://localhost:8080", "server URL (empty = use direct storage)")
+	outputFormat := fs.String("output", "text", "output format: text or json")
+	_ = fs.Parse(os.Args[2:])
+
+	var status statusResponse
+	if *serverURL != "" {
+		res, err := statusViaHTTP(*serverURL)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Status failed: %v\n", err)
+			os.Exit(1)
+		}
+		status = *res
+	} else {
+		cfg, _, err := loadConfig(*configPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
+			os.Exit(1)
+		}
+		debugMode := cfg.Debug
+		logger, err := utils.NewLogger(debugMode)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to create logger: %v\n", err)
+			os.Exit(1)
+		}
+		defer logger.Sync()
+		components, err := initializeComponents(cfg, logger, debugMode)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to initialize: %v\n", err)
+			os.Exit(1)
+		}
+		defer components.Close()
+		ctx := context.Background()
+		docCount, err := components.Storage.CountDocuments(ctx)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Count documents failed: %v\n", err)
+			os.Exit(1)
+		}
+		chunkCount, err := components.Storage.CountChunks(ctx)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Count chunks failed: %v\n", err)
+			os.Exit(1)
+		}
+		status = statusResponse{
+			Documents:       docCount,
+			Chunks:          chunkCount,
+			VectorIndexSize: components.Engine.VectorIndexSize(),
+		}
+		diskBytes, err := storage.DiskUsageBytes(cfg.Storage.DatabasePath, cfg.Storage.BleveIndexPath, cfg.Storage.FAISSIndexPath)
+		if err == nil {
+			status.DiskUsageBytes = &diskBytes
+		}
+	}
+
+	switch *outputFormat {
+	case "json":
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(status); err != nil {
+			fmt.Fprintf(os.Stderr, "Output failed: %v\n", err)
+			os.Exit(1)
+		}
+	case "text":
+		fmt.Printf("documents:          %d   # count of indexed documents\n", status.Documents)
+		fmt.Printf("chunks:             %d   # count of text chunks\n", status.Chunks)
+		fmt.Printf("vector_index_size:  %d   # count of vectors in semantic index\n", status.VectorIndexSize)
+		if status.DiskUsageBytes != nil {
+			fmt.Printf("disk_usage_bytes:   %d   # storage + indices on disk\n", *status.DiskUsageBytes)
+		}
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown output format %q; use text or json\n", *outputFormat)
+		os.Exit(1)
+	}
+}
+
+func statusViaHTTP(serverURL string) (*statusResponse, error) {
+	resp, err := http.Get(serverURL + "/api/v1/status")
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("server returned %d: %s", resp.StatusCode, string(b))
+	}
+	var s statusResponse
+	if err := json.NewDecoder(resp.Body).Decode(&s); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	return &s, nil
 }
 
 func runIndex() {
@@ -574,6 +678,7 @@ Usage:
   sagasu search [flags] <query>   Search documents
   sagasu index [flags] <file>     Index a document
   sagasu delete [flags] <id>       Delete a document
+  sagasu status [flags]           Show engine/storage/index status
   sagasu watch <add|remove|list>  Manage watched directories
   sagasu version                  Show version
   sagasu help                     Show this help
@@ -594,6 +699,11 @@ Index Flags:
   --config string    Config file path
   --title string     Document title
 
+Status Flags:
+  --config string    Config file path (for direct storage mode)
+  --server string    Server URL (default: http://localhost:8080). Use empty (--server "") for direct storage.
+  --output string    Output format: text or json (default: text)
+
 Watch Flags:
   --server string    Server URL (default: http://localhost:8080)
 
@@ -605,6 +715,8 @@ Examples:
   sagasu search --keyword-weight 0.7 --semantic-weight 0.3 "neural networks"
   sagasu index --title "My Document" document.txt
   sagasu delete doc-123
+  sagasu status
+  sagasu status --output json
   sagasu watch add /path/to/docs
   sagasu watch list`)
 }
