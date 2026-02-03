@@ -60,7 +60,7 @@ func TestHandleWatchDirectoriesList(t *testing.T) {
 	cfg := &config.SearchConfig{ChunkSize: 10, ChunkOverlap: 2, TopKCandidates: 20,
 		DefaultKeywordWeight: 0.5, DefaultSemanticWeight: 0.5}
 	engine := search.NewEngine(store, embedder, vecIdx, kwIdx, cfg)
-	idx := indexer.NewIndexer(store, embedder, vecIdx, kwIdx, cfg)
+	idx := indexer.NewIndexer(store, embedder, vecIdx, kwIdx, cfg, nil)
 	logger := zap.NewNop()
 
 	mock := &mockWatchService{dirs: []string{"/tmp/docs"}}
@@ -96,7 +96,7 @@ func TestHandleWatchDirectoriesList_NotEnabled(t *testing.T) {
 	cfg := &config.SearchConfig{ChunkSize: 10, ChunkOverlap: 2, TopKCandidates: 20,
 		DefaultKeywordWeight: 0.5, DefaultSemanticWeight: 0.5}
 	engine := search.NewEngine(store, embedder, vecIdx, kwIdx, cfg)
-	idx := indexer.NewIndexer(store, embedder, vecIdx, kwIdx, cfg)
+	idx := indexer.NewIndexer(store, embedder, vecIdx, kwIdx, cfg, nil)
 	logger := zap.NewNop()
 
 	srv := NewServer(engine, idx, store, &config.ServerConfig{Port: 8080}, logger, nil, "", nil)
@@ -121,7 +121,7 @@ func TestHandleWatchDirectoriesAdd(t *testing.T) {
 	cfg := &config.SearchConfig{ChunkSize: 10, ChunkOverlap: 2, TopKCandidates: 20,
 		DefaultKeywordWeight: 0.5, DefaultSemanticWeight: 0.5}
 	engine := search.NewEngine(store, embedder, vecIdx, kwIdx, cfg)
-	idx := indexer.NewIndexer(store, embedder, vecIdx, kwIdx, cfg)
+	idx := indexer.NewIndexer(store, embedder, vecIdx, kwIdx, cfg, nil)
 	logger := zap.NewNop()
 
 	mock := &mockWatchService{}
@@ -153,7 +153,7 @@ func TestHandleWatchDirectoriesAdd_InvalidPath(t *testing.T) {
 	cfg := &config.SearchConfig{ChunkSize: 10, ChunkOverlap: 2, TopKCandidates: 20,
 		DefaultKeywordWeight: 0.5, DefaultSemanticWeight: 0.5}
 	engine := search.NewEngine(store, embedder, vecIdx, kwIdx, cfg)
-	idx := indexer.NewIndexer(store, embedder, vecIdx, kwIdx, cfg)
+	idx := indexer.NewIndexer(store, embedder, vecIdx, kwIdx, cfg, nil)
 	logger := zap.NewNop()
 
 	mock := &mockWatchService{}
@@ -182,7 +182,7 @@ func TestHandleWatchDirectoriesRemove(t *testing.T) {
 	cfg := &config.SearchConfig{ChunkSize: 10, ChunkOverlap: 2, TopKCandidates: 20,
 		DefaultKeywordWeight: 0.5, DefaultSemanticWeight: 0.5}
 	engine := search.NewEngine(store, embedder, vecIdx, kwIdx, cfg)
-	idx := indexer.NewIndexer(store, embedder, vecIdx, kwIdx, cfg)
+	idx := indexer.NewIndexer(store, embedder, vecIdx, kwIdx, cfg, nil)
 	logger := zap.NewNop()
 
 	mock := &mockWatchService{dirs: []string{dir}}
@@ -212,7 +212,7 @@ func TestHandleSearch(t *testing.T) {
 	cfg := &config.SearchConfig{ChunkSize: 10, ChunkOverlap: 2, TopKCandidates: 20,
 		DefaultKeywordWeight: 0.5, DefaultSemanticWeight: 0.5}
 	engine := search.NewEngine(store, embedder, vecIdx, kwIdx, cfg)
-	idx := indexer.NewIndexer(store, embedder, vecIdx, kwIdx, cfg)
+	idx := indexer.NewIndexer(store, embedder, vecIdx, kwIdx, cfg, nil)
 	_ = idx.IndexDocument(context.Background(), &models.DocumentInput{ID: "d1", Title: "T", Content: "hello world"})
 	logger := zap.NewNop()
 

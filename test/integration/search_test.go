@@ -53,7 +53,7 @@ func TestIntegration_Search(t *testing.T) {
 	defer kwIndex.Close()
 
 	engine := search.NewEngine(store, embedder, vecIndex, kwIndex, &cfg.Search)
-	idx := indexer.NewIndexer(store, embedder, vecIndex, kwIndex, &cfg.Search)
+	idx := indexer.NewIndexer(store, embedder, vecIndex, kwIndex, &cfg.Search, nil)
 	ctx := context.Background()
 
 	if err := idx.IndexDocument(ctx, &models.DocumentInput{

@@ -42,7 +42,7 @@ func TestEngine_Search(t *testing.T) {
 		DefaultKeywordWeight: 0.5, DefaultSemanticWeight: 0.5,
 	}
 	engine := NewEngine(store, emb, vecIndex, kwIndex, cfg)
-	idx := indexer.NewIndexer(store, emb, vecIndex, kwIndex, cfg)
+	idx := indexer.NewIndexer(store, emb, vecIndex, kwIndex, cfg, nil)
 
 	if err := idx.IndexDocument(ctx, &models.DocumentInput{
 		ID: "d1", Title: "T1", Content: "machine learning algorithms",

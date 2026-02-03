@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/hyperjump/sagasu/internal/config"
 	"github.com/hyperjump/sagasu/internal/embedding"
+	"github.com/hyperjump/sagasu/internal/extract"
 	"github.com/hyperjump/sagasu/internal/fileid"
 	"github.com/hyperjump/sagasu/internal/keyword"
 	"github.com/hyperjump/sagasu/internal/models"
@@ -26,15 +27,18 @@ type Indexer struct {
 	keywordIndex keyword.KeywordIndex
 	chunker      *Chunker
 	config       *config.SearchConfig
+	extractor    *extract.Extractor
 }
 
 // NewIndexer creates an indexer with the given dependencies.
+// extractor may be nil; when nil, IndexFile treats all files as plain text.
 func NewIndexer(
 	storage storage.Storage,
 	embedder embedding.Embedder,
 	vectorIndex vector.VectorIndex,
 	keywordIndex keyword.KeywordIndex,
 	cfg *config.SearchConfig,
+	extractor *extract.Extractor,
 ) *Indexer {
 	return &Indexer{
 		storage:      storage,
@@ -43,6 +47,7 @@ func NewIndexer(
 		keywordIndex: keywordIndex,
 		chunker:      NewChunker(cfg.ChunkSize, cfg.ChunkOverlap),
 		config:       cfg,
+		extractor:    extractor,
 	}
 }
 
@@ -116,19 +121,30 @@ func (idx *Indexer) IndexFile(ctx context.Context, path string, allowedExts []st
 	if !info.Mode().IsRegular() {
 		return fmt.Errorf("not a regular file: %s", absPath)
 	}
-	content, err := os.ReadFile(absPath)
+	text, err := idx.extractContent(absPath)
 	if err != nil {
-		return fmt.Errorf("read file: %w", err)
+		return fmt.Errorf("extract content: %w", err)
 	}
 	docID := fileid.FileDocID(absPath)
 	_ = idx.DeleteDocument(ctx, docID)
 	input := &models.DocumentInput{
 		ID:       docID,
 		Title:    filepath.Base(absPath),
-		Content:  string(content),
+		Content:  text,
 		Metadata: map[string]interface{}{"source_path": absPath},
 	}
 	return idx.IndexDocument(ctx, input)
+}
+
+func (idx *Indexer) extractContent(path string) (string, error) {
+	if idx.extractor != nil {
+		return idx.extractor.Extract(path)
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return string(content), nil
 }
 
 func extensionAllowed(ext string, allowed []string) bool {

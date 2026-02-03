@@ -26,5 +26,5 @@ search:
 # Optional: monitor directories for file changes (index on create/modify, remove from index on delete)
 watch:
   directories: []   # e.g. ["/path/to/docs", "~/notes"]
-  extensions: [".txt", ".md", ".rst"]
+  extensions: [".txt", ".md", ".rst", ".pdf", ".docx", ".xlsx"]
   recursive: true

@@ -54,22 +54,28 @@ sagasu search --keyword-weight 0.7 --semantic-weight 0.3 "search engine"
 
 ### index
 
-Index a document from a file.
+Index a document from a file. Supports plain text and binary formats:
+
+- **Plain text**: `.txt`, `.md`, `.rst` (content used as-is)
+- **PDF**: `.pdf` (text extracted from pages)
+- **Word**: `.docx`, `.odt`, `.rtf` (text extracted)
+- **Excel**: `.xlsx` (cell values extracted from all sheets)
 
 ```bash
 sagasu index [flags] <file>
 ```
 
-| Flag     | Default      | Description       |
-| -------- | ------------ | ----------------- |
-| --config | (see server) | Config file path. |
-| --title  | ""           | Document title.   |
+| Flag     | Default      | Description                                                       |
+| -------- | ------------ | ----------------------------------------------------------------- |
+| --config | (see server) | Config file path.                                                 |
+| --title  | ""           | Document title (unused; document title is derived from filename). |
 
 **Examples:**
 
 ```bash
 sagasu index document.txt
-sagasu index --title "My Notes" notes.txt
+sagasu index report.pdf
+sagasu index spreadsheet.xlsx
 ```
 
 ---

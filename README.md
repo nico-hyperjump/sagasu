@@ -11,6 +11,7 @@ Fast local hybrid search engine combining semantic and keyword search for macOS.
 - **Private**: All data stays on your machine.
 - **Simple**: CLI and HTTP API.
 - **Directory monitoring**: Watch directories for file changes; auto-index on create/modify, remove from index on delete.
+- **Multiple formats**: PDF, DOCX, Excel (.xlsx), and plain text (.txt, .md, .rst).
 
 ## Installation
 
@@ -60,7 +61,9 @@ sagasu server
 ### Index documents
 
 ```bash
-sagasu index --title "My Document" document.txt
+sagasu index document.txt
+sagasu index report.pdf
+sagasu index spreadsheet.xlsx
 ```
 
 Or via HTTP:

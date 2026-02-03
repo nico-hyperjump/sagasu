@@ -20,6 +20,7 @@ import (
 	"github.com/hyperjump/sagasu/internal/cli"
 	"github.com/hyperjump/sagasu/internal/config"
 	"github.com/hyperjump/sagasu/internal/embedding"
+	"github.com/hyperjump/sagasu/internal/extract"
 	"github.com/hyperjump/sagasu/internal/fileid"
 	"github.com/hyperjump/sagasu/internal/indexer"
 	"github.com/hyperjump/sagasu/internal/keyword"
@@ -241,7 +242,7 @@ func searchViaHTTP(serverURL string, query *models.SearchQuery) (*models.SearchR
 func runIndex() {
 	fs := flag.NewFlagSet("index", flag.ExitOnError)
 	configPath := fs.String("config", defaultConfigPath, "config file path")
-	title := fs.String("title", "", "document title")
+	_ = fs.String("title", "", "document title (unused; document title is derived from filename)")
 	_ = fs.Parse(os.Args[2:])
 
 	if fs.NArg() < 1 {
@@ -249,12 +250,6 @@ func runIndex() {
 		os.Exit(1)
 	}
 	filePath := fs.Arg(0)
-
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		fmt.Printf("Failed to read file: %v\n", err)
-		os.Exit(1)
-	}
 
 	cfg, _, err := loadConfig(*configPath)
 	if err != nil {
@@ -270,15 +265,14 @@ func runIndex() {
 	}
 	defer components.Close()
 
-	input := &models.DocumentInput{
-		Title:   *title,
-		Content: string(content),
-	}
-	if err := components.Indexer.IndexDocument(context.Background(), input); err != nil {
+	// Use nil for allowedExts to accept any file (CLI index has no extension filter)
+	if err := components.Indexer.IndexFile(context.Background(), filePath, nil); err != nil {
 		fmt.Printf("Indexing failed: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("Document indexed successfully: %s\n", input.ID)
+	absPath, _ := filepath.Abs(filePath)
+	docID := fileid.FileDocID(absPath)
+	fmt.Printf("Document indexed successfully: %s\n", docID)
 }
 
 func runWatch() {
@@ -447,7 +441,7 @@ func initializeComponents(cfg *config.Config, logger *zap.Logger) (*Components, 
 	}
 
 	engine := search.NewEngine(store, embedder, vectorIndex, keywordIndex, &cfg.Search)
-	idx := indexer.NewIndexer(store, embedder, vectorIndex, keywordIndex, &cfg.Search)
+	idx := indexer.NewIndexer(store, embedder, vectorIndex, keywordIndex, &cfg.Search, extract.NewExtractor())
 
 	return &Components{
 		Storage:      store,
