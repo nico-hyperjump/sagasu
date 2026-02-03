@@ -31,6 +31,8 @@ sagasu server --debug
 
 Run a hybrid search from the command line. Results are returned in two lists: **keyword matches** (exact term matches) and **semantic-only matches** (meaning-based; documents that did not match by keyword). Use `--keyword=false` for semantic-only, or `--semantic=false` for keyword-only.
 
+The query is all remaining arguments joined by spaces. Multi-word queries work with or without quotes (e.g. `sagasu search hyperjump profile` and `sagasu search "hyperjump profile"` are equivalent).
+
 ```bash
 sagasu search [flags] <query>
 ```

@@ -49,6 +49,30 @@ func TestSearchArgsReorder(t *testing.T) {
 	}
 }
 
+func TestBuildSearchQuery(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		expected string
+	}{
+		{"single word", []string{"hyperjump"}, "hyperjump"},
+		{"multiple words", []string{"hyperjump", "profile"}, "hyperjump profile"},
+		{"single quoted phrase", []string{"hyperjump profile"}, "hyperjump profile"},
+		{"three words", []string{"machine", "learning", "algorithms"}, "machine learning algorithms"},
+		{"empty args", []string{}, ""},
+		{"blank args", []string{"  ", "  "}, ""},
+		{"one space", []string{" "}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := buildSearchQuery(tt.args)
+			if got != tt.expected {
+				t.Errorf("buildSearchQuery(%v) = %q, want %q", tt.args, got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestLoadConfig_prefersCwdConfigWhenDefaultPath(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.yaml")

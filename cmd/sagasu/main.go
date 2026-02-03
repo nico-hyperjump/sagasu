@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -180,6 +181,7 @@ func runServer() {
 // printSearchUsage prints search subcommand usage and search efficiency hints.
 func printSearchUsage(fs *flag.FlagSet) {
 	fmt.Fprintf(fs.Output(), "Usage: sagasu search [flags] <query>\n\n")
+	fmt.Fprintf(fs.Output(), "Query is all remaining arguments joined by spaces. Multi-word queries work with or without quotes.\n\n")
 	fs.PrintDefaults()
 	fmt.Fprintf(fs.Output(), `
 Results are split into two lists: keyword matches and semantic-only matches.
@@ -188,10 +190,17 @@ Results are split into two lists: keyword matches and semantic-only matches.
   • --min-score filters low-relevance hits; --limit controls how many per list.
 
 Examples:
-  sagasu search "machine learning"
-  sagasu search --keyword=false "neural networks"   # semantic-only
-  sagasu search --min-score 0.1 --limit 20 "your query"
+  sagasu search machine learning
+  sagasu search "machine learning"                 # same as above
+  sagasu search --keyword=false neural networks    # semantic-only
+  sagasu search --min-score 0.1 --limit 20 your query
 `)
+}
+
+// buildSearchQuery joins all positional args with spaces so multi-word queries
+// work the same with or without shell quoting (e.g. "hyperjump profile" vs hyperjump profile).
+func buildSearchQuery(args []string) string {
+	return strings.TrimSpace(strings.Join(args, " "))
 }
 
 // searchArgsReorder moves any flags (and their values) that appear after the query
@@ -230,7 +239,11 @@ func runSearch() {
 		printSearchUsage(fs)
 		os.Exit(1)
 	}
-	queryStr := fs.Arg(0)
+	queryStr := buildSearchQuery(fs.Args())
+	if queryStr == "" {
+		printSearchUsage(fs)
+		os.Exit(1)
+	}
 
 	format := cli.OutputText
 	switch *outputFormat {
