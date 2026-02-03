@@ -104,8 +104,11 @@ func TestApplyDefaults(t *testing.T) {
 	if cfg.Watch.Extensions == nil {
 		t.Error("watch extensions should be set by default")
 	}
-	if len(cfg.Watch.Extensions) != 6 || cfg.Watch.Extensions[0] != ".txt" {
+	if len(cfg.Watch.Extensions) != 9 || cfg.Watch.Extensions[0] != ".txt" {
 		t.Errorf("watch extensions: got %v", cfg.Watch.Extensions)
+	}
+	if cfg.Watch.Extensions[6] != ".pptx" || cfg.Watch.Extensions[7] != ".odp" || cfg.Watch.Extensions[8] != ".ods" {
+		t.Errorf("watch extensions should include .pptx, .odp, .ods: got %v", cfg.Watch.Extensions)
 	}
 }
 

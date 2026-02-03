@@ -146,3 +146,211 @@ func TestExtractBytes_docx(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+// minimalPptx returns minimal .pptx zip bytes with one slide containing the given text in <a:t> tags.
+func minimalPptx(text string) []byte {
+	var buf bytes.Buffer
+	w := zip.NewWriter(&buf)
+	fw, _ := w.Create("ppt/slides/slide1.xml")
+	_, _ = fw.Write([]byte(`<p:sld xmlns:p="a" xmlns:a="b"><p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>` + text + `</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>`))
+	_ = w.Close()
+	return buf.Bytes()
+}
+
+func TestExtractBytes_pptx(t *testing.T) {
+	e := NewExtractor()
+	content := minimalPptx("Searchable pptx content")
+	got, err := e.ExtractBytes(content, ".pptx")
+	if err != nil {
+		t.Fatalf("ExtractBytes: %v", err)
+	}
+	if got != "Searchable pptx content" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestExtractBytes_pptxMultipleSlides(t *testing.T) {
+	var buf bytes.Buffer
+	w := zip.NewWriter(&buf)
+	slide1, _ := w.Create("ppt/slides/slide1.xml")
+	_, _ = slide1.Write([]byte(`<p:sld><p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>First slide</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>`))
+	slide2, _ := w.Create("ppt/slides/slide2.xml")
+	_, _ = slide2.Write([]byte(`<p:sld><p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>Second slide</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>`))
+	_ = w.Close()
+
+	e := NewExtractor()
+	got, err := e.ExtractBytes(buf.Bytes(), ".pptx")
+	if err != nil {
+		t.Fatalf("ExtractBytes: %v", err)
+	}
+	if got != "First slide Second slide" {
+		t.Errorf("got %q", got)
+	}
+}
+
+// minimalOdp returns minimal .odp zip bytes with content.xml containing text in text:p/text:span/text:h.
+func minimalOdp(contentXML string) []byte {
+	var buf bytes.Buffer
+	w := zip.NewWriter(&buf)
+	fw, _ := w.Create("content.xml")
+	_, _ = fw.Write([]byte(contentXML))
+	_ = w.Close()
+	return buf.Bytes()
+}
+
+func TestExtractBytes_odp(t *testing.T) {
+	contentXML := `<office:document><office:body><draw:page><draw:text-box><text:p>Searchable odp content</text:p></draw:text-box></draw:page></office:body></office:document>`
+	e := NewExtractor()
+	got, err := e.ExtractBytes(minimalOdp(contentXML), ".odp")
+	if err != nil {
+		t.Fatalf("ExtractBytes: %v", err)
+	}
+	if got != "Searchable odp content" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestExtractBytes_odpTextH(t *testing.T) {
+	contentXML := `<office:document><office:body><draw:page><text:h>Slide title</text:h><text:p>Body text</text:p></draw:page></office:body></office:document>`
+	e := NewExtractor()
+	got, err := e.ExtractBytes(minimalOdp(contentXML), ".odp")
+	if err != nil {
+		t.Fatalf("ExtractBytes: %v", err)
+	}
+	// Order is p, span, h so we get "Body text" then "Slide title"
+	if got != "Body text Slide title" {
+		t.Errorf("got %q", got)
+	}
+}
+
+// minimalOds returns minimal .ods zip bytes with content.xml containing text in text:p/text:span.
+func minimalOds(contentXML string) []byte {
+	var buf bytes.Buffer
+	w := zip.NewWriter(&buf)
+	fw, _ := w.Create("content.xml")
+	_, _ = fw.Write([]byte(contentXML))
+	_ = w.Close()
+	return buf.Bytes()
+}
+
+func TestExtractBytes_ods(t *testing.T) {
+	contentXML := `<office:document><office:body><table:table><table:table-row><table:table-cell><text:p>Searchable ods content</text:p></table:table-cell></table:table-row></table:table></office:body></office:document>`
+	e := NewExtractor()
+	got, err := e.ExtractBytes(minimalOds(contentXML), ".ods")
+	if err != nil {
+		t.Fatalf("ExtractBytes: %v", err)
+	}
+	if got != "Searchable ods content" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestExtractBytes_odsMultipleCells(t *testing.T) {
+	contentXML := `<office:document><office:body><table:table><table:table-row><table:table-cell><text:p>Cell A</text:p></table:table-cell><table:table-cell><text:span>Cell B</text:span></table:table-cell></table:table-row></table:table></office:body></office:document>`
+	e := NewExtractor()
+	got, err := e.ExtractBytes(minimalOds(contentXML), ".ods")
+	if err != nil {
+		t.Fatalf("ExtractBytes: %v", err)
+	}
+	if got != "Cell A Cell B" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestExtractBytes_pptxEmpty(t *testing.T) {
+	var buf bytes.Buffer
+	w := zip.NewWriter(&buf)
+	_, _ = w.Create("ppt/slides/other.xml")
+	_, _ = w.Create("docProps/core.xml")
+	_ = w.Close()
+	e := NewExtractor()
+	got, err := e.ExtractBytes(buf.Bytes(), ".pptx")
+	if err != nil {
+		t.Fatalf("ExtractBytes: %v", err)
+	}
+	if got != "" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestExtract_pptxFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "deck.pptx")
+	if err := os.WriteFile(path, minimalPptx("Searchable from file"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	e := NewExtractor()
+	got, err := e.Extract(path)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if got != "Searchable from file" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestExtract_odpFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "pres.odp")
+	content := minimalOdp(`<office:document><office:body><draw:page><text:p>From file</text:p></draw:page></office:body></office:document>`)
+	if err := os.WriteFile(path, content, 0600); err != nil {
+		t.Fatal(err)
+	}
+	e := NewExtractor()
+	got, err := e.Extract(path)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if got != "From file" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestExtract_odsFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sheet.ods")
+	content := minimalOds(`<office:document><office:body><table:table><table:table-row><table:table-cell><text:p>From file</text:p></table:table-cell></table:table-row></table:table></office:body></office:document>`)
+	if err := os.WriteFile(path, content, 0600); err != nil {
+		t.Fatal(err)
+	}
+	e := NewExtractor()
+	got, err := e.Extract(path)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if got != "From file" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestExtract_pptxNotZip(t *testing.T) {
+	e := NewExtractor()
+	_, err := e.ExtractBytes([]byte("not a zip"), ".pptx")
+	if err == nil {
+		t.Error("expected error for invalid pptx")
+	}
+}
+
+func TestExtract_odpContentNotFound(t *testing.T) {
+	var buf bytes.Buffer
+	w := zip.NewWriter(&buf)
+	_, _ = w.Create("other.xml")
+	_ = w.Close()
+	e := NewExtractor()
+	_, err := e.ExtractBytes(buf.Bytes(), ".odp")
+	if err == nil {
+		t.Error("expected error when content.xml missing")
+	}
+}
+
+func TestExtract_odsContentNotFound(t *testing.T) {
+	var buf bytes.Buffer
+	w := zip.NewWriter(&buf)
+	_, _ = w.Create("other.xml")
+	_ = w.Close()
+	e := NewExtractor()
+	_, err := e.ExtractBytes(buf.Bytes(), ".ods")
+	if err == nil {
+		t.Error("expected error when content.xml missing")
+	}
+}

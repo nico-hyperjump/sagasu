@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -38,26 +37,25 @@ var version = "dev"
 
 const defaultConfigPath = "/usr/local/etc/sagasu/config.yaml"
 
-// loadConfig loads config from path. If path is the default and the file does not exist,
-// it tries config.yaml in the current directory (for development).
+// loadConfig loads config from path. When path is the default, it first looks for
+// config.yaml in the current directory (for development); if that exists it is used,
+// so that "sagasu server" from the project dir uses the project's config (including debug).
 // Returns the config and the path that was actually loaded (for saving, etc.).
 func loadConfig(path string) (*config.Config, string, error) {
-	cfg, err := config.Load(path)
-	if err != nil {
-		if path == defaultConfigPath {
-			if unwrap := errors.Unwrap(err); unwrap != nil && os.IsNotExist(unwrap) {
-				if cwd, cwdErr := os.Getwd(); cwdErr == nil {
-					fallback := filepath.Join(cwd, "config.yaml")
-					if _, statErr := os.Stat(fallback); statErr == nil {
-						cfg, loadErr := config.Load(fallback)
-						if loadErr != nil {
-							return nil, "", loadErr
-						}
-						return cfg, fallback, nil
-					}
+	if path == defaultConfigPath {
+		if cwd, cwdErr := os.Getwd(); cwdErr == nil {
+			fallback := filepath.Join(cwd, "config.yaml")
+			if _, statErr := os.Stat(fallback); statErr == nil {
+				cfg, loadErr := config.Load(fallback)
+				if loadErr != nil {
+					return nil, "", loadErr
 				}
+				return cfg, fallback, nil
 			}
 		}
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
 		return nil, "", err
 	}
 	return cfg, path, nil
@@ -109,6 +107,11 @@ func runServer() {
 		os.Exit(1)
 	}
 	defer logger.Sync()
+
+	logger.Info("config loaded",
+		zap.String("config_path", resolvedConfigPath),
+		zap.Bool("debug", debugMode),
+	)
 
 	components, err := initializeComponents(cfg, logger, debugMode)
 	if err != nil {

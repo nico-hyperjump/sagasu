@@ -18,7 +18,7 @@ func NewExtractor() *Extractor {
 
 // Extract reads the file at path and returns its text content.
 // For plain text files (.txt, .md, .rst), content is returned as-is (UTF-8 validated).
-// For PDF, DOCX, and Excel, text is extracted from the binary format.
+// For PDF, DOCX, Excel, PPTX, ODP, and ODS, text is extracted from the binary format.
 // Returns an error if the file cannot be read or the format is unsupported.
 func (e *Extractor) Extract(path string) (string, error) {
 	content, err := os.ReadFile(path)
@@ -39,6 +39,12 @@ func (e *Extractor) ExtractBytes(content []byte, ext string) (string, error) {
 		return extractDOCX(content)
 	case ".xlsx":
 		return extractExcel(content)
+	case ".pptx":
+		return extractPPTX(content)
+	case ".odp":
+		return extractODP(content)
+	case ".ods":
+		return extractODS(content)
 	case ".txt", ".md", ".rst", "":
 		return extractPlain(content)
 	default:
