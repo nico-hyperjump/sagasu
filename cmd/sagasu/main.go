@@ -160,6 +160,25 @@ func runServer() {
 	_ = srv.Stop(ctx)
 }
 
+// searchArgsReorder moves any flags (and their values) that appear after the query
+// to the front of the slice so that flag.Parse() sees them. Go's flag package
+// stops at the first non-flag argument, so "sagasu search \"query\" -min-score 0.5"
+// would otherwise leave -min-score unparsed (default 0.05 used).
+func searchArgsReorder(args []string) []string {
+	for i, a := range args {
+		if len(a) > 0 && a[0] == '-' {
+			if i == 0 {
+				return args
+			}
+			reordered := make([]string, 0, len(args))
+			reordered = append(reordered, args[i:]...)
+			reordered = append(reordered, args[:i]...)
+			return reordered
+		}
+	}
+	return args
+}
+
 func runSearch() {
 	fs := flag.NewFlagSet("search", flag.ExitOnError)
 	configPath := fs.String("config", defaultConfigPath, "config file path")
@@ -168,7 +187,8 @@ func runSearch() {
 	minScore := fs.Float64("min-score", 0.05, "minimum score threshold (exclude results below)")
 	kwWeight := fs.Float64("keyword-weight", 0.5, "keyword weight")
 	semWeight := fs.Float64("semantic-weight", 0.5, "semantic weight")
-	_ = fs.Parse(os.Args[2:])
+	searchArgs := searchArgsReorder(os.Args[2:])
+	_ = fs.Parse(searchArgs)
 
 	if fs.NArg() < 1 {
 		fmt.Println("Usage: sagasu search [flags] <query>")
