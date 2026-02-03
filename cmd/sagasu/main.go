@@ -164,6 +164,7 @@ func runSearch() {
 	configPath := fs.String("config", defaultConfigPath, "config file path")
 	serverURL := fs.String("server", "http://localhost:8080", "server URL (empty = use direct storage)")
 	limit := fs.Int("limit", 10, "number of results")
+	minScore := fs.Float64("min-score", 0.05, "minimum score threshold (exclude results below)")
 	kwWeight := fs.Float64("keyword-weight", 0.5, "keyword weight")
 	semWeight := fs.Float64("semantic-weight", 0.5, "semantic weight")
 	_ = fs.Parse(os.Args[2:])
@@ -177,6 +178,7 @@ func runSearch() {
 	searchQuery := &models.SearchQuery{
 		Query:          queryStr,
 		Limit:          *limit,
+		MinScore:       *minScore,
 		KeywordWeight:  *kwWeight,
 		SemanticWeight: *semWeight,
 	}
@@ -476,6 +478,7 @@ Search Flags:
   --config string           Config file path (for direct storage mode)
   --server string           Server URL (default: http://localhost:8080). Use empty to access storage directly.
   --limit int               Number of results (default: 10)
+  --min-score float         Minimum score threshold (default: 0.05)
   --keyword-weight float    Keyword weight (default: 0.5)
   --semantic-weight float   Semantic weight (default: 0.5)
 
@@ -489,6 +492,7 @@ Watch Flags:
 Examples:
   sagasu server
   sagasu search "machine learning algorithms"
+  sagasu search --min-score 0.1 "raosan"
   sagasu search --keyword-weight 0.7 --semantic-weight 0.3 "neural networks"
   sagasu index --title "My Document" document.txt
   sagasu delete doc-123

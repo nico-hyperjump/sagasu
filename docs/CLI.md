@@ -33,18 +33,20 @@ Run a hybrid search from the command line.
 sagasu search [flags] <query>
 ```
 
-| Flag              | Default      | Description            |
-| ----------------- | ------------ | ---------------------- |
-| --config          | (see server) | Config file path.      |
-| --limit           | 10           | Number of results.     |
-| --keyword-weight  | 0.5          | Keyword score weight.  |
-| --semantic-weight | 0.5          | Semantic score weight. |
+| Flag              | Default      | Description              |
+| ----------------- | ------------ | ------------------------ |
+| --config          | (see server) | Config file path.        |
+| --limit           | 10           | Number of results.       |
+| --min-score       | 0.05         | Minimum score threshold. |
+| --keyword-weight  | 0.5          | Keyword score weight.    |
+| --semantic-weight | 0.5          | Semantic score weight.   |
 
 **Examples:**
 
 ```bash
 sagasu search "machine learning algorithms"
 sagasu search --limit 20 "neural networks"
+sagasu search --min-score 0.1 "raosan"
 sagasu search --keyword-weight 0.7 --semantic-weight 0.3 "search engine"
 ```
 
