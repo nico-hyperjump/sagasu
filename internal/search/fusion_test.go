@@ -14,11 +14,15 @@ func TestNormalizeKeywordScores(t *testing.T) {
 		{ID: "c", Score: 1},
 	}
 	m := NormalizeKeywordScores(results)
-	if m["b"] != 1.0 {
-		t.Errorf("max score should be 1.0, got %f", m["b"])
+	// No longer normalizes - returns raw scores for smart ranking
+	if m["b"] != 4.0 {
+		t.Errorf("b should be 4.0 (raw score), got %f", m["b"])
 	}
-	if m["a"] != 0.5 {
-		t.Errorf("a should be 0.5, got %f", m["a"])
+	if m["a"] != 2.0 {
+		t.Errorf("a should be 2.0 (raw score), got %f", m["a"])
+	}
+	if m["c"] != 1.0 {
+		t.Errorf("c should be 1.0 (raw score), got %f", m["c"])
 	}
 	if len(m) != 3 {
 		t.Errorf("expected 3 entries, got %d", len(m))

@@ -16,26 +16,16 @@ type FusedResult struct {
 	SemanticScore float64
 }
 
-// NormalizeKeywordScores normalizes keyword scores to [0,1] by max.
+// NormalizeKeywordScores returns keyword scores without normalization.
+// The smart ranking in keyword search (term coverage, phrase boost, additive title+content)
+// already produces comparable scores, and normalizing by max would compress content-only
+// matches too aggressively when title matches exist.
 func NormalizeKeywordScores(results []*keyword.KeywordResult) map[string]float64 {
-	if len(results) == 0 {
-		return make(map[string]float64)
-	}
-	maxScore := results[0].Score
+	scores := make(map[string]float64)
 	for _, r := range results {
-		if r.Score > maxScore {
-			maxScore = r.Score
-		}
+		scores[r.ID] = r.Score
 	}
-	normalized := make(map[string]float64)
-	for _, r := range results {
-		if maxScore > 0 {
-			normalized[r.ID] = r.Score / maxScore
-		} else {
-			normalized[r.ID] = 0
-		}
-	}
-	return normalized
+	return scores
 }
 
 // NormalizeSemanticScores returns semantic scores as-is (already 0-1 for cosine).

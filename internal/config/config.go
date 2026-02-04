@@ -69,6 +69,7 @@ type SearchConfig struct {
 	ChunkOverlap               int     `yaml:"chunk_overlap"`
 	TopKCandidates             int     `yaml:"top_k_candidates"`
 	KeywordTitleBoost          float64 `yaml:"keyword_title_boost"`
+	KeywordPhraseBoost         float64 `yaml:"keyword_phrase_boost"`
 }
 
 // Load reads and parses the config file at path, expands paths, and applies defaults.

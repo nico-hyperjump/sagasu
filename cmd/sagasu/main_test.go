@@ -115,6 +115,20 @@ search:
 	if kw2 != 0.49 || sem2 != 0.49 {
 		t.Errorf("searchMinScoreDefaultsFromConfig(nonexistent) = %f, %f; want 0.49, 0.49", kw2, sem2)
 	}
+	// Zero values from config are accepted (meaning "no filtering")
+	zeroConfigPath := filepath.Join(dir, "zero_config.yaml")
+	zeroContent := `
+search:
+  default_min_keyword_score: 0
+  default_min_semantic_score: 0.05
+`
+	if err := os.WriteFile(zeroConfigPath, []byte(zeroContent), 0600); err != nil {
+		t.Fatal(err)
+	}
+	kw3, sem3 := searchMinScoreDefaultsFromConfig(zeroConfigPath)
+	if kw3 != 0 || sem3 != 0.05 {
+		t.Errorf("searchMinScoreDefaultsFromConfig(zero config) = %f, %f; want 0, 0.05", kw3, sem3)
+	}
 }
 
 func TestLoadConfig_prefersCwdConfigWhenDefaultPath(t *testing.T) {

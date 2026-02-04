@@ -49,13 +49,16 @@ func ApplyDefaults(cfg *Config) {
 		cfg.Search.TopKCandidates = 100
 	}
 	if cfg.Search.KeywordTitleBoost == 0 {
-		cfg.Search.KeywordTitleBoost = 10.0
+		cfg.Search.KeywordTitleBoost = 3.0 // reduced from 10.0 for smarter multi-term ranking
+	}
+	if cfg.Search.KeywordPhraseBoost == 0 {
+		cfg.Search.KeywordPhraseBoost = 1.5 // boost for adjacent query terms (phrase match)
 	}
 	if cfg.Search.DefaultMinKeywordScore == 0 {
-		cfg.Search.DefaultMinKeywordScore = 0.49
+		cfg.Search.DefaultMinKeywordScore = 0 // disabled - let ranking handle relevance
 	}
 	if cfg.Search.DefaultMinSemanticScore == 0 {
-		cfg.Search.DefaultMinSemanticScore = 0.49
+		cfg.Search.DefaultMinSemanticScore = 0.05
 	}
 	if cfg.Watch.Extensions == nil {
 		cfg.Watch.Extensions = []string{".txt", ".md", ".rst", ".pdf", ".docx", ".xlsx", ".pptx", ".odp", ".ods"}

@@ -12,6 +12,9 @@ type SearchOptions struct {
 	// TitleBoost multiplies the score contribution from matches in the title (filename) field.
 	// Values > 1 make filename matches rank higher (e.g. 3.0). Use 1.0 for no boost.
 	TitleBoost float64
+	// PhraseBoost multiplies the score when query terms appear close together (phrase match).
+	// Values > 1 boost documents with adjacent query terms (e.g. 1.5). Use 1.0 for no boost.
+	PhraseBoost float64
 }
 
 // KeywordIndex defines keyword search operations.

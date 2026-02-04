@@ -219,19 +219,16 @@ func searchConfigPathFromArgs(args []string, defaultPath string) string {
 }
 
 // searchMinScoreDefaultsFromConfig loads config at path and returns default min keyword and semantic scores.
-// On load failure or zero values, returns 0.49 for both.
+// On load failure, returns 0.49 for both. Zero values from config are accepted (meaning no filtering).
 func searchMinScoreDefaultsFromConfig(path string) (minKeyword, minSemantic float64) {
 	minKeyword, minSemantic = 0.49, 0.49
 	cfg, _, err := loadConfig(path)
 	if err != nil || cfg == nil {
 		return minKeyword, minSemantic
 	}
-	if cfg.Search.DefaultMinKeywordScore > 0 {
-		minKeyword = cfg.Search.DefaultMinKeywordScore
-	}
-	if cfg.Search.DefaultMinSemanticScore > 0 {
-		minSemantic = cfg.Search.DefaultMinSemanticScore
-	}
+	// Use config values directly - 0 is a valid value meaning "no filtering"
+	minKeyword = cfg.Search.DefaultMinKeywordScore
+	minSemantic = cfg.Search.DefaultMinSemanticScore
 	return minKeyword, minSemantic
 }
 

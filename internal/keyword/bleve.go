@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/blevesearch/bleve/v2"
 	"github.com/blevesearch/bleve/v2/analysis/analyzer/standard"
@@ -59,18 +60,24 @@ func (b *BleveIndex) Index(ctx context.Context, id string, doc *models.Document)
 
 // Search runs a match query and returns up to limit results.
 // When opts is nil or TitleBoost <= 1, a single match over title+content is used (original behavior).
-// When opts.TitleBoost > 1, we run separate title and content queries and merge with
-// score = max(titleScore*boost, contentScore) so that title-only matches can compete with content-heavy docs.
+// When opts.TitleBoost > 1, we run separate title and content queries and merge with additive scoring,
+// term coverage bonus, and phrase proximity boost for smarter multi-term ranking.
 func (b *BleveIndex) Search(ctx context.Context, query string, limit int, opts *SearchOptions) ([]*KeywordResult, error) {
 	titleBoost := 1.0
-	if opts != nil && opts.TitleBoost > 0 {
-		titleBoost = opts.TitleBoost
+	phraseBoost := 1.0
+	if opts != nil {
+		if opts.TitleBoost > 0 {
+			titleBoost = opts.TitleBoost
+		}
+		if opts.PhraseBoost > 0 {
+			phraseBoost = opts.PhraseBoost
+		}
 	}
 
-	if titleBoost <= 1.0 {
+	if titleBoost <= 1.0 && phraseBoost <= 1.0 {
 		return b.searchSingle(ctx, query, limit)
 	}
-	return b.searchWithTitleBoost(ctx, query, limit, titleBoost)
+	return b.searchWithBoosts(ctx, query, limit, titleBoost, phraseBoost)
 }
 
 // searchSingle runs one MatchQuery over all fields (original behavior).
@@ -90,14 +97,22 @@ func (b *BleveIndex) searchSingle(ctx context.Context, query string, limit int) 
 	return out, nil
 }
 
-// searchWithTitleBoost runs separate title and content queries, then merges by score = max(boost*titleScore, contentScore).
-func (b *BleveIndex) searchWithTitleBoost(ctx context.Context, query string, limit int, titleBoost float64) ([]*KeywordResult, error) {
+// searchWithBoosts runs smart multi-term search with:
+// 1. Additive scoring: score = (titleScore * titleBoost) + contentScore
+// 2. Term coverage bonus: documents matching more query terms get higher scores
+// 3. Phrase proximity boost: documents with adjacent query terms get boosted
+func (b *BleveIndex) searchWithBoosts(ctx context.Context, query string, limit int, titleBoost, phraseBoost float64) ([]*KeywordResult, error) {
 	// Request enough from each so merged top "limit" is correct (same doc can appear in both).
 	reqSize := limit * 2
 	if reqSize < 50 {
 		reqSize = 50
 	}
 
+	// Tokenize query into terms for term coverage calculation
+	terms := tokenizeQuery(query)
+	numTerms := len(terms)
+
+	// Run title and content queries
 	titleQuery := bleve.NewMatchQuery(query)
 	titleQuery.SetField("title")
 	titleReq := bleve.NewSearchRequest(titleQuery)
@@ -119,18 +134,66 @@ func (b *BleveIndex) searchWithTitleBoost(ctx context.Context, query string, lim
 		return nil, fmt.Errorf("Bleve content search failed: %w", err)
 	}
 
-	// Merge: for each doc ID, score = max(titleScore*boost, contentScore)
-	scores := make(map[string]float64)
+	// Collect title and content scores separately for additive merge
+	titleScores := make(map[string]float64)
+	contentScores := make(map[string]float64)
+
 	for _, hit := range titleResults.Hits {
-		s := hit.Score * titleBoost
-		if s > scores[hit.ID] {
-			scores[hit.ID] = s
-		}
+		titleScores[hit.ID] = hit.Score * titleBoost
 	}
 	for _, hit := range contentResults.Hits {
-		if hit.Score > scores[hit.ID] {
-			scores[hit.ID] = hit.Score
+		contentScores[hit.ID] = hit.Score
+	}
+
+	// Calculate term coverage: for multi-term queries, count how many terms each doc matches
+	termCoverage := make(map[string]int) // docID -> number of matched terms
+	if numTerms > 1 {
+		termCoverage = b.calculateTermCoverage(terms, reqSize)
+	}
+
+	// Check for phrase matches if phraseBoost > 1 and query has multiple terms
+	phraseMatches := make(map[string]bool)
+	if phraseBoost > 1.0 && numTerms > 1 {
+		phraseMatches = b.findPhraseMatches(query, reqSize)
+	}
+
+	// Merge scores: ADDITIVE (title + content) * termCoverageMultiplier * phraseMultiplier
+	scores := make(map[string]float64)
+	allDocIDs := make(map[string]struct{})
+	for id := range titleScores {
+		allDocIDs[id] = struct{}{}
+	}
+	for id := range contentScores {
+		allDocIDs[id] = struct{}{}
+	}
+
+	for id := range allDocIDs {
+		// Additive: title + content (both can contribute)
+		baseScore := titleScores[id] + contentScores[id]
+
+		// Term coverage multiplier: PENALIZE documents that don't match all terms
+		// Formula: (matched/total)^2 - this heavily penalizes partial matches
+		// - 2/2 terms: (1.0)^2 = 1.0 (no penalty)
+		// - 1/2 terms: (0.5)^2 = 0.25 (75% penalty!)
+		// - 1/3 terms: (0.33)^2 = 0.11 (89% penalty!)
+		// This ensures documents matching ALL query terms rank higher than partial matches
+		termCoverageMultiplier := 1.0
+		if numTerms > 1 {
+			matched := termCoverage[id]
+			if matched == 0 {
+				matched = 1 // at least matched once to be in results
+			}
+			coverage := float64(matched) / float64(numTerms)
+			termCoverageMultiplier = coverage * coverage // squared penalty
 		}
+
+		// Phrase boost multiplier
+		phraseMultiplier := 1.0
+		if phraseMatches[id] {
+			phraseMultiplier = phraseBoost
+		}
+
+		scores[id] = baseScore * termCoverageMultiplier * phraseMultiplier
 	}
 
 	// Sort by score desc and take top limit
@@ -152,6 +215,72 @@ func (b *BleveIndex) searchWithTitleBoost(ctx context.Context, query string, lim
 		out[i] = &KeywordResult{ID: s.id, Score: s.score}
 	}
 	return out, nil
+}
+
+// tokenizeQuery splits query into lowercase terms, filtering out empty strings.
+func tokenizeQuery(query string) []string {
+	words := strings.Fields(strings.ToLower(query))
+	terms := make([]string, 0, len(words))
+	for _, w := range words {
+		w = strings.TrimSpace(w)
+		if w != "" {
+			terms = append(terms, w)
+		}
+	}
+	return terms
+}
+
+// calculateTermCoverage counts how many unique query terms each document matches.
+func (b *BleveIndex) calculateTermCoverage(terms []string, reqSize int) map[string]int {
+	coverage := make(map[string]int)
+	for _, term := range terms {
+		// Run a match query for each individual term
+		q := bleve.NewMatchQuery(term)
+		req := bleve.NewSearchRequest(q)
+		req.Size = reqSize
+		results, err := b.index.Search(req)
+		if err != nil {
+			continue
+		}
+		for _, hit := range results.Hits {
+			coverage[hit.ID]++
+		}
+	}
+	return coverage
+}
+
+// findPhraseMatches finds documents where the query appears as a phrase (adjacent terms).
+func (b *BleveIndex) findPhraseMatches(query string, reqSize int) map[string]bool {
+	matches := make(map[string]bool)
+
+	// Use MatchPhraseQuery which is more flexible than PhraseQuery
+	// It allows some slop (terms don't need to be immediately adjacent)
+	phraseQuery := bleve.NewMatchPhraseQuery(query)
+	phraseQuery.SetField("content")
+	req := bleve.NewSearchRequest(phraseQuery)
+	req.Size = reqSize
+	results, err := b.index.Search(req)
+	if err != nil {
+		return matches
+	}
+	for _, hit := range results.Hits {
+		matches[hit.ID] = true
+	}
+
+	// Also check title field for phrase matches
+	titlePhraseQuery := bleve.NewMatchPhraseQuery(query)
+	titlePhraseQuery.SetField("title")
+	titleReq := bleve.NewSearchRequest(titlePhraseQuery)
+	titleReq.Size = reqSize
+	titleResults, err := b.index.Search(titleReq)
+	if err != nil {
+		return matches
+	}
+	for _, hit := range titleResults.Hits {
+		matches[hit.ID] = true
+	}
+
+	return matches
 }
 
 // Delete removes a document from the index.

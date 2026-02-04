@@ -105,14 +105,17 @@ func TestApplyDefaults(t *testing.T) {
 		t.Errorf("when both search enabled flags are false, both should default to true; got keyword=%v semantic=%v",
 			cfg.Search.DefaultKeywordEnabled, cfg.Search.DefaultSemanticEnabled)
 	}
-	if cfg.Search.KeywordTitleBoost != 10.0 {
-		t.Errorf("default keyword_title_boost: got %f, want 10.0", cfg.Search.KeywordTitleBoost)
+	if cfg.Search.KeywordTitleBoost != 3.0 {
+		t.Errorf("default keyword_title_boost: got %f, want 3.0", cfg.Search.KeywordTitleBoost)
 	}
-	if cfg.Search.DefaultMinKeywordScore != 0.49 {
-		t.Errorf("default min keyword score: got %f, want 0.49", cfg.Search.DefaultMinKeywordScore)
+	if cfg.Search.KeywordPhraseBoost != 1.5 {
+		t.Errorf("default keyword_phrase_boost: got %f, want 1.5", cfg.Search.KeywordPhraseBoost)
 	}
-	if cfg.Search.DefaultMinSemanticScore != 0.49 {
-		t.Errorf("default min semantic score: got %f, want 0.49", cfg.Search.DefaultMinSemanticScore)
+	if cfg.Search.DefaultMinKeywordScore != 0 {
+		t.Errorf("default min keyword score: got %f, want 0 (disabled for smart ranking)", cfg.Search.DefaultMinKeywordScore)
+	}
+	if cfg.Search.DefaultMinSemanticScore != 0.05 {
+		t.Errorf("default min semantic score: got %f, want 0.05", cfg.Search.DefaultMinSemanticScore)
 	}
 	if cfg.Watch.Extensions == nil {
 		t.Error("watch extensions should be set by default")

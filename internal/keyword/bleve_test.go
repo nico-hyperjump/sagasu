@@ -229,3 +229,221 @@ func TestBleveIndex_Search_titleBoostRanksTitleMatchHigher(t *testing.T) {
 		t.Errorf("with title boost, expected first result docA (title match), got %q (score %f)", resultsBoosted[0].ID, resultsBoosted[0].Score)
 	}
 }
+
+// TestBleveIndex_Search_termCoverageBoostsAllTermMatches tests that documents matching
+// ALL query terms rank higher than documents matching only SOME terms.
+func TestBleveIndex_Search_termCoverageBoostsAllTermMatches(t *testing.T) {
+	dir := t.TempDir()
+	indexPath := filepath.Join(dir, "bleve")
+
+	idx, err := NewBleveIndex(indexPath)
+	if err != nil {
+		t.Fatalf("NewBleveIndex: %v", err)
+	}
+	defer func() {
+		_ = idx.Close()
+	}()
+
+	ctx := context.Background()
+
+	// Doc with BOTH query terms in content
+	docBothTerms := &models.Document{
+		ID:      "docBothTerms",
+		Title:   "01.docx",
+		Content: "January 2023 Symon-Monika-Neosense Highlights. The symon highlights are important.",
+	}
+	// Doc with only ONE query term in title
+	docOneTerm := &models.Document{
+		ID:      "docOneTerm",
+		Title:   "Symon Deck 2026.pptx",
+		Content: "This presentation covers various topics without mentioning highlights.",
+	}
+
+	if err := idx.Index(ctx, docBothTerms.ID, docBothTerms); err != nil {
+		t.Fatalf("Index docBothTerms: %v", err)
+	}
+	if err := idx.Index(ctx, docOneTerm.ID, docOneTerm); err != nil {
+		t.Fatalf("Index docOneTerm: %v", err)
+	}
+
+	// Search for "symon highlights" - doc with BOTH terms should rank first
+	results, err := idx.Search(ctx, "symon highlights", 10, &SearchOptions{TitleBoost: 3.0, PhraseBoost: 1.5})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) < 2 {
+		t.Fatalf("expected at least 2 results, got %d", len(results))
+	}
+
+	// Document with both terms should rank higher due to term coverage bonus
+	if results[0].ID != "docBothTerms" {
+		t.Errorf("expected docBothTerms (matches both 'symon' and 'highlights') to rank first, got %q", results[0].ID)
+	}
+}
+
+// TestBleveIndex_Search_phraseBoostBoostedAdjacentTerms tests that documents with
+// query terms appearing close together rank higher than those with scattered terms.
+func TestBleveIndex_Search_phraseBoostBoostedAdjacentTerms(t *testing.T) {
+	dir := t.TempDir()
+	indexPath := filepath.Join(dir, "bleve")
+
+	idx, err := NewBleveIndex(indexPath)
+	if err != nil {
+		t.Fatalf("NewBleveIndex: %v", err)
+	}
+	defer func() {
+		_ = idx.Close()
+	}()
+
+	ctx := context.Background()
+
+	// Doc with terms adjacent (phrase match)
+	docPhrase := &models.Document{
+		ID:      "docPhrase",
+		Title:   "report.docx",
+		Content: "The machine learning algorithm showed excellent results in our tests.",
+	}
+	// Doc with terms scattered
+	docScattered := &models.Document{
+		ID:      "docScattered",
+		Title:   "notes.docx",
+		Content: "The machine was broken. We had to wait for learning materials to fix it. The algorithm failed.",
+	}
+
+	if err := idx.Index(ctx, docPhrase.ID, docPhrase); err != nil {
+		t.Fatalf("Index docPhrase: %v", err)
+	}
+	if err := idx.Index(ctx, docScattered.ID, docScattered); err != nil {
+		t.Fatalf("Index docScattered: %v", err)
+	}
+
+	// Search for "machine learning" with phrase boost
+	results, err := idx.Search(ctx, "machine learning", 10, &SearchOptions{TitleBoost: 3.0, PhraseBoost: 2.0})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) < 2 {
+		t.Fatalf("expected at least 2 results, got %d", len(results))
+	}
+
+	// Document with phrase "machine learning" should rank first
+	if results[0].ID != "docPhrase" {
+		t.Errorf("expected docPhrase (has 'machine learning' as phrase) to rank first, got %q", results[0].ID)
+	}
+}
+
+// TestBleveIndex_Search_additiveScoring tests that title and content scores are added
+// (not max'd), so a document with matches in both ranks higher.
+func TestBleveIndex_Search_additiveScoring(t *testing.T) {
+	dir := t.TempDir()
+	indexPath := filepath.Join(dir, "bleve")
+
+	idx, err := NewBleveIndex(indexPath)
+	if err != nil {
+		t.Fatalf("NewBleveIndex: %v", err)
+	}
+	defer func() {
+		_ = idx.Close()
+	}()
+
+	ctx := context.Background()
+
+	// Doc with term in BOTH title and content
+	docBoth := &models.Document{
+		ID:      "docBoth",
+		Title:   "Neural Network Tutorial.docx",
+		Content: "This tutorial explains neural network architectures and training methods for neural networks.",
+	}
+	// Doc with term only in title
+	docTitleOnly := &models.Document{
+		ID:      "docTitleOnly",
+		Title:   "Neural Network Basics.pptx",
+		Content: "This presentation covers machine learning fundamentals.",
+	}
+
+	if err := idx.Index(ctx, docBoth.ID, docBoth); err != nil {
+		t.Fatalf("Index docBoth: %v", err)
+	}
+	if err := idx.Index(ctx, docTitleOnly.ID, docTitleOnly); err != nil {
+		t.Fatalf("Index docTitleOnly: %v", err)
+	}
+
+	// Search for "neural network"
+	results, err := idx.Search(ctx, "neural network", 10, &SearchOptions{TitleBoost: 3.0, PhraseBoost: 1.5})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) < 2 {
+		t.Fatalf("expected at least 2 results, got %d", len(results))
+	}
+
+	// Document with matches in both title AND content should rank higher (additive)
+	if results[0].ID != "docBoth" {
+		t.Errorf("expected docBoth (matches in title AND content) to rank first, got %q", results[0].ID)
+	}
+}
+
+// TestBleveIndex_Search_contentOnlyMatchNotFiltered tests that content-only matches
+// are not filtered out when there are title matches with higher scores.
+func TestBleveIndex_Search_contentOnlyMatchNotFiltered(t *testing.T) {
+	dir := t.TempDir()
+	indexPath := filepath.Join(dir, "bleve")
+
+	idx, err := NewBleveIndex(indexPath)
+	if err != nil {
+		t.Fatalf("NewBleveIndex: %v", err)
+	}
+	defer func() {
+		_ = idx.Close()
+	}()
+
+	ctx := context.Background()
+
+	// Doc with term in title
+	docTitle := &models.Document{
+		ID:      "docTitle",
+		Title:   "Kubernetes Deployment Guide.docx",
+		Content: "General deployment procedures.",
+	}
+	// Doc with term only in content (no title match)
+	docContent := &models.Document{
+		ID:      "docContent",
+		Title:   "Infrastructure Notes.docx",
+		Content: "Our kubernetes cluster runs multiple pods. Kubernetes is essential for our deployment.",
+	}
+
+	if err := idx.Index(ctx, docTitle.ID, docTitle); err != nil {
+		t.Fatalf("Index docTitle: %v", err)
+	}
+	if err := idx.Index(ctx, docContent.ID, docContent); err != nil {
+		t.Fatalf("Index docContent: %v", err)
+	}
+
+	// Search for "kubernetes"
+	results, err := idx.Search(ctx, "kubernetes", 10, &SearchOptions{TitleBoost: 3.0})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+
+	// Both documents should be found (content-only match should not be filtered)
+	if len(results) < 2 {
+		t.Fatalf("expected 2 results (title and content matches), got %d", len(results))
+	}
+
+	// Verify both documents are in results
+	foundTitle, foundContent := false, false
+	for _, r := range results {
+		if r.ID == "docTitle" {
+			foundTitle = true
+		}
+		if r.ID == "docContent" {
+			foundContent = true
+		}
+	}
+	if !foundTitle {
+		t.Error("docTitle should be in results")
+	}
+	if !foundContent {
+		t.Error("docContent should be in results (content-only match should not be filtered)")
+	}
+}
