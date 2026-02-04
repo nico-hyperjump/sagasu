@@ -211,7 +211,7 @@ func buildSearchQuery(args []string) string {
 // searchArgsReorder moves any flags (and their values) that appear after the query
 // to the front of the slice so that flag.Parse() sees them. Go's flag package
 // stops at the first non-flag argument, so "sagasu search \"query\" -min-score 0.5"
-// would otherwise leave -min-score unparsed (default 0.02 used).
+// would otherwise leave -min-score unparsed (default 0.49 used).
 func searchArgsReorder(args []string) []string {
 	for i, a := range args {
 		if len(a) > 0 && a[0] == '-' {
@@ -232,7 +232,7 @@ func runSearch() {
 	configPath := fs.String("config", defaultConfigPath, "config file path")
 	serverURL := fs.String("server", "http://localhost:8080", "server URL (empty = use direct storage when server is not running)")
 	limit := fs.Int("limit", 10, "number of results")
-	minScore := fs.Float64("min-score", 0.02, "minimum score threshold (exclude results below)")
+	minScore := fs.Float64("min-score", 0.49, "minimum score threshold (exclude results below)")
 	kwEnabled := fs.Bool("keyword", true, "enable keyword search")
 	semEnabled := fs.Bool("semantic", true, "enable semantic search")
 	outputFormat := fs.String("output", "text", "output format: text (human-readable), compact (one result per line), or json (parseable)")
@@ -712,7 +712,7 @@ Search Flags:
   --config string           Config file path (for direct storage mode)
   --server string           Server URL (default: http://localhost:8080). Use empty (--server "") to use direct storage when server is not running.
   --limit int               Number of results per list (default: 10)
-  --min-score float         Minimum score threshold (default: 0.02)
+  --min-score float         Minimum score threshold (default: 0.49)
   --keyword                 Enable keyword search (default: true)
   --semantic                Enable semantic search (default: true)
 
