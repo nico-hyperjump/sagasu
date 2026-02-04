@@ -15,13 +15,13 @@ func TestSearchArgsReorder(t *testing.T) {
 	}{
 		{
 			name:     "flags after query are moved first",
-			args:     []string{"invoice from microsoft", "-min-score", "0.5"},
-			expected: []string{"-min-score", "0.5", "invoice from microsoft"},
+			args:     []string{"invoice from microsoft", "-min-keyword-score", "0.5"},
+			expected: []string{"-min-keyword-score", "0.5", "invoice from microsoft"},
 		},
 		{
 			name:     "flags first returns unchanged",
-			args:     []string{"-min-score", "0.5", "invoice from microsoft"},
-			expected: []string{"-min-score", "0.5", "invoice from microsoft"},
+			args:     []string{"-min-keyword-score", "0.5", "invoice from microsoft"},
+			expected: []string{"-min-keyword-score", "0.5", "invoice from microsoft"},
 		},
 		{
 			name:     "query only returns unchanged",
@@ -70,6 +70,50 @@ func TestBuildSearchQuery(t *testing.T) {
 				t.Errorf("buildSearchQuery(%v) = %q, want %q", tt.args, got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestSearchConfigPathFromArgs(t *testing.T) {
+	tests := []struct {
+		name   string
+		args   []string
+		defaultPath string
+		want   string
+	}{
+		{"no config flag", []string{"-limit", "5", "query"}, "/default.yaml", "/default.yaml"},
+		{"-config present", []string{"-config", "/custom.yaml", "query"}, "/default.yaml", "/custom.yaml"},
+		{"--config present", []string{"--config", "/other.yaml"}, "/default.yaml", "/other.yaml"},
+		{"config at end", []string{"query", "-config", "/end.yaml"}, "/default.yaml", "/end.yaml"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := searchConfigPathFromArgs(tt.args, tt.defaultPath)
+			if got != tt.want {
+				t.Errorf("searchConfigPathFromArgs() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSearchMinScoreDefaultsFromConfig(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.yaml")
+	content := `
+search:
+  default_min_keyword_score: 0.2
+  default_min_semantic_score: 0.3
+`
+	if err := os.WriteFile(configPath, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	kw, sem := searchMinScoreDefaultsFromConfig(configPath)
+	if kw != 0.2 || sem != 0.3 {
+		t.Errorf("searchMinScoreDefaultsFromConfig() = %f, %f; want 0.2, 0.3", kw, sem)
+	}
+	// Missing file returns 0.49, 0.49
+	kw2, sem2 := searchMinScoreDefaultsFromConfig(filepath.Join(dir, "nonexistent.yaml"))
+	if kw2 != 0.49 || sem2 != 0.49 {
+		t.Errorf("searchMinScoreDefaultsFromConfig(nonexistent) = %f, %f; want 0.49, 0.49", kw2, sem2)
 	}
 }
 

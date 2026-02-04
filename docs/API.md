@@ -19,18 +19,22 @@ Run a hybrid (keyword + semantic) search.
   "offset": 0,
   "keyword_enabled": true,
   "semantic_enabled": true,
-  "min_score": 0.0
+  "min_score": 0.0,
+  "min_keyword_score": 0.0,
+  "min_semantic_score": 0.0
 }
 ```
 
-| Field            | Type   | Description                                                                           |
-| ---------------- | ------ | ------------------------------------------------------------------------------------- |
-| query            | string | Required. Search query text.                                                          |
-| limit            | int    | Max results (default 10, max 100).                                                    |
-| offset           | int    | Pagination offset (default 0).                                                        |
-| keyword_enabled  | bool   | Run keyword search (default true). Omitted = false; if both false, both are enabled.  |
-| semantic_enabled | bool   | Run semantic search (default true). Omitted = false; if both false, both are enabled. |
-| min_score        | float  | Minimum score to include (applied to each result list).                               |
+| Field              | Type   | Description                                                                             |
+| ------------------ | ------ | --------------------------------------------------------------------------------------- |
+| query              | string | Required. Search query text.                                                            |
+| limit              | int    | Max results (default 10, max 100).                                                      |
+| offset             | int    | Pagination offset (default 0).                                                          |
+| keyword_enabled    | bool   | Run keyword search (default true). Omitted = false; if both false, both are enabled.    |
+| semantic_enabled   | bool   | Run semantic search (default true). Omitted = false; if both false, both are enabled.   |
+| min_score          | float  | Legacy: minimum score for both lists when min_keyword_score / min_semantic_score unset. |
+| min_keyword_score  | float  | Minimum score for keyword (non-semantic) results. Server config default when unset.     |
+| min_semantic_score | float  | Minimum score for semantic-only results. Server config default when unset.              |
 
 **Response (200):**
 

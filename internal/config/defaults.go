@@ -51,6 +51,12 @@ func ApplyDefaults(cfg *Config) {
 	if cfg.Search.KeywordTitleBoost == 0 {
 		cfg.Search.KeywordTitleBoost = 10.0
 	}
+	if cfg.Search.DefaultMinKeywordScore == 0 {
+		cfg.Search.DefaultMinKeywordScore = 0.49
+	}
+	if cfg.Search.DefaultMinSemanticScore == 0 {
+		cfg.Search.DefaultMinSemanticScore = 0.49
+	}
 	if cfg.Watch.Extensions == nil {
 		cfg.Watch.Extensions = []string{".txt", ".md", ".rst", ".pdf", ".docx", ".xlsx", ".pptx", ".odp", ".ods"}
 	}

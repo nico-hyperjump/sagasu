@@ -192,13 +192,13 @@ func printSearchUsage(fs *flag.FlagSet) {
 Results are split into two lists: keyword matches and semantic-only matches.
   • Use --keyword=false for semantic-only search.
   • Use --semantic=false for keyword-only search.
-  • --min-score filters low-relevance hits; --limit controls how many per list.
+  • --min-keyword-score and --min-semantic-score filter low-relevance hits; --limit controls how many per list.
 
 Examples:
   sagasu search machine learning
   sagasu search "machine learning"                 # same as above
-  sagasu search --keyword=false neural networks    # semantic-only
-  sagasu search --min-score 0.1 --limit 20 your query
+  sagasu search --keyword=false neural networks     # semantic-only
+  sagasu search --min-keyword-score 0.1 --min-semantic-score 0.2 --limit 20 your query
 `)
 }
 
@@ -206,6 +206,33 @@ Examples:
 // work the same with or without shell quoting (e.g. "hyperjump profile" vs hyperjump profile).
 func buildSearchQuery(args []string) string {
 	return strings.TrimSpace(strings.Join(args, " "))
+}
+
+// searchConfigPathFromArgs returns the value of -config/--config from args if present, else defaultPath.
+func searchConfigPathFromArgs(args []string, defaultPath string) string {
+	for i, a := range args {
+		if (a == "-config" || a == "--config") && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+	return defaultPath
+}
+
+// searchMinScoreDefaultsFromConfig loads config at path and returns default min keyword and semantic scores.
+// On load failure or zero values, returns 0.49 for both.
+func searchMinScoreDefaultsFromConfig(path string) (minKeyword, minSemantic float64) {
+	minKeyword, minSemantic = 0.49, 0.49
+	cfg, _, err := loadConfig(path)
+	if err != nil || cfg == nil {
+		return minKeyword, minSemantic
+	}
+	if cfg.Search.DefaultMinKeywordScore > 0 {
+		minKeyword = cfg.Search.DefaultMinKeywordScore
+	}
+	if cfg.Search.DefaultMinSemanticScore > 0 {
+		minSemantic = cfg.Search.DefaultMinSemanticScore
+	}
+	return minKeyword, minSemantic
 }
 
 // searchArgsReorder moves any flags (and their values) that appear after the query
@@ -228,16 +255,20 @@ func searchArgsReorder(args []string) []string {
 }
 
 func runSearch() {
+	searchArgs := searchArgsReorder(os.Args[2:])
+	configPath := searchConfigPathFromArgs(searchArgs, defaultConfigPath)
+	defaultMinKw, defaultMinSem := searchMinScoreDefaultsFromConfig(configPath)
+
 	fs := flag.NewFlagSet("search", flag.ExitOnError)
-	configPath := fs.String("config", defaultConfigPath, "config file path")
+	configPathFlag := fs.String("config", defaultConfigPath, "config file path")
 	serverURL := fs.String("server", "http://localhost:8080", "server URL (empty = use direct storage when server is not running)")
 	limit := fs.Int("limit", 10, "number of results")
-	minScore := fs.Float64("min-score", 0.49, "minimum score threshold (exclude results below)")
+	minKeywordScore := fs.Float64("min-keyword-score", defaultMinKw, "minimum score for keyword (non-semantic) results")
+	minSemanticScore := fs.Float64("min-semantic-score", defaultMinSem, "minimum score for semantic-only results")
 	kwEnabled := fs.Bool("keyword", true, "enable keyword search")
 	semEnabled := fs.Bool("semantic", true, "enable semantic search")
 	outputFormat := fs.String("output", "text", "output format: text (human-readable), compact (one result per line), or json (parseable)")
 	fs.Usage = func() { printSearchUsage(fs) }
-	searchArgs := searchArgsReorder(os.Args[2:])
 	_ = fs.Parse(searchArgs)
 
 	if fs.NArg() < 1 {
@@ -264,11 +295,12 @@ func runSearch() {
 	}
 
 	searchQuery := &models.SearchQuery{
-		Query:           queryStr,
-		Limit:           *limit,
-		MinScore:        *minScore,
-		KeywordEnabled:  *kwEnabled,
-		SemanticEnabled: *semEnabled,
+		Query:             queryStr,
+		Limit:             *limit,
+		MinKeywordScore:   *minKeywordScore,
+		MinSemanticScore:  *minSemanticScore,
+		KeywordEnabled:   *kwEnabled,
+		SemanticEnabled:  *semEnabled,
 	}
 
 	if *serverURL != "" {
@@ -286,7 +318,7 @@ func runSearch() {
 	}
 
 	// Direct storage access (when server is not running).
-	cfg, _, err := loadConfig(*configPath)
+	cfg, _, err := loadConfig(*configPathFlag)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
 		os.Exit(1)
@@ -709,12 +741,13 @@ Server Flags:
   --debug            Enable debug logging (directory changes, file indexing, etc.)
 
 Search Flags:
-  --config string           Config file path (for direct storage mode)
-  --server string           Server URL (default: http://localhost:8080). Use empty (--server "") to use direct storage when server is not running.
-  --limit int               Number of results per list (default: 10)
-  --min-score float         Minimum score threshold (default: 0.49)
-  --keyword                 Enable keyword search (default: true)
-  --semantic                Enable semantic search (default: true)
+  --config string             Config file path (for direct storage mode; also used for default min-score values)
+  --server string             Server URL (default: http://localhost:8080). Use empty (--server "") to use direct storage when server is not running.
+  --limit int                 Number of results per list (default: 10)
+  --min-keyword-score float   Minimum score for keyword results (default from config, or 0.49)
+  --min-semantic-score float  Minimum score for semantic-only results (default from config, or 0.49)
+  --keyword                   Enable keyword search (default: true)
+  --semantic                  Enable semantic search (default: true)
 
 Index Flags:
   --config string    Config file path
@@ -731,7 +764,7 @@ Watch Flags:
 Examples:
   sagasu server
   sagasu search "machine learning algorithms"
-  sagasu search --min-score 0.1 "raosan"
+  sagasu search --min-keyword-score 0.1 "raosan"
   sagasu search --output json "query"   # structured JSON for other apps
   sagasu search --keyword=false "neural networks"   # semantic-only
   sagasu index --title "My Document" document.txt

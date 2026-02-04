@@ -37,22 +37,23 @@ The query is all remaining arguments joined by spaces. Multi-word queries work w
 sagasu search [flags] <query>
 ```
 
-| Flag        | Default               | Description                                                                                       |
-| ----------- | --------------------- | ------------------------------------------------------------------------------------------------- |
-| --config    | (see server)          | Config file path.                                                                                 |
-| --server    | http://localhost:8080 | Server URL. Use `--server ""` to use direct storage (config DB/Bleve) when server is not running. |
-| --limit     | 10                    | Number of results.                                                                                |
-| --min-score | 0.05                  | Minimum score threshold.                                                                          |
-| --keyword   | true                  | Enable keyword search.                                                                            |
-| --semantic  | true                  | Enable semantic search.                                                                           |
-| --output    | text                  | Output format: `text` (human-readable) or `json` (structured, parseable for other apps).          |
+| Flag                 | Default               | Description                                                                                       |
+| -------------------- | --------------------- | ------------------------------------------------------------------------------------------------- |
+| --config             | (see server)          | Config file path (also used for default min-score values when not overridden by flags).           |
+| --server             | http://localhost:8080 | Server URL. Use `--server ""` to use direct storage (config DB/Bleve) when server is not running. |
+| --limit              | 10                    | Number of results.                                                                                |
+| --min-keyword-score  | from config (or 0.49) | Minimum score for keyword (non-semantic) results.                                                 |
+| --min-semantic-score | from config (or 0.49) | Minimum score for semantic-only results.                                                          |
+| --keyword            | true                  | Enable keyword search.                                                                            |
+| --semantic           | true                  | Enable semantic search.                                                                           |
+| --output             | text                  | Output format: `text` (human-readable) or `json` (structured, parseable for other apps).          |
 
 **Examples:**
 
 ```bash
 sagasu search "machine learning algorithms"
 sagasu search --limit 20 "neural networks"
-sagasu search --min-score 0.1 "raosan"
+sagasu search --min-keyword-score 0.1 "raosan"
 sagasu search --keyword=false "meaning-based only"   # semantic-only
 sagasu search --semantic=false "exact terms"         # keyword-only
 sagasu search --output json "query"   # JSON output for piping to jq or other tools

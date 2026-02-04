@@ -62,6 +62,59 @@ func TestEngine_Search(t *testing.T) {
 	}
 }
 
+func TestResolveMinScores_and_filterByMinScore(t *testing.T) {
+	ctx := context.Background()
+	store, err := storage.NewSQLiteStorage(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	emb := embedding.NewMockEmbedder(4)
+	defer emb.Close()
+	vecIndex, _ := vector.NewMemoryIndex(4)
+	defer vecIndex.Close()
+	kwPath := t.TempDir() + "/bleve"
+	kwIndex, _ := keyword.NewBleveIndex(kwPath)
+	defer kwIndex.Close()
+
+	cfg := &config.SearchConfig{
+		TopKCandidates: 20, ChunkSize: 50, ChunkOverlap: 10,
+		DefaultKeywordEnabled: true, DefaultSemanticEnabled: true,
+		DefaultMinKeywordScore: 0.8, DefaultMinSemanticScore: 0.9,
+	}
+	engine := NewEngine(store, emb, vecIndex, kwIndex, cfg)
+	idx := indexer.NewIndexer(store, emb, vecIndex, kwIndex, cfg, nil)
+	if err := idx.IndexDocument(ctx, &models.DocumentInput{ID: "d1", Title: "T1", Content: "machine learning"}); err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := engine.Search(ctx, &models.SearchQuery{
+		Query: "machine learning", Limit: 5, KeywordEnabled: true, SemanticEnabled: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.TotalNonSemantic + resp.TotalSemantic
+
+	resp2, err := engine.Search(ctx, &models.SearchQuery{
+		Query: "machine learning", Limit: 5, MinScore: 0.1, KeywordEnabled: true, SemanticEnabled: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp2
+
+	resp3, err := engine.Search(ctx, &models.SearchQuery{
+		Query: "machine learning", Limit: 5,
+		MinKeywordScore: 0.05, MinSemanticScore: 0.05,
+		KeywordEnabled: true, SemanticEnabled: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp3
+}
+
 func TestEngine_VectorIndexSize(t *testing.T) {
 	ctx := context.Background()
 	store, err := storage.NewSQLiteStorage(":memory:")

@@ -108,6 +108,12 @@ func TestApplyDefaults(t *testing.T) {
 	if cfg.Search.KeywordTitleBoost != 10.0 {
 		t.Errorf("default keyword_title_boost: got %f, want 10.0", cfg.Search.KeywordTitleBoost)
 	}
+	if cfg.Search.DefaultMinKeywordScore != 0.49 {
+		t.Errorf("default min keyword score: got %f, want 0.49", cfg.Search.DefaultMinKeywordScore)
+	}
+	if cfg.Search.DefaultMinSemanticScore != 0.49 {
+		t.Errorf("default min semantic score: got %f, want 0.49", cfg.Search.DefaultMinSemanticScore)
+	}
 	if cfg.Watch.Extensions == nil {
 		t.Error("watch extensions should be set by default")
 	}

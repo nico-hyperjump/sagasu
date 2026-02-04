@@ -108,9 +108,13 @@ func (e *Engine) Search(ctx context.Context, query *models.SearchQuery) (*models
 	semanticByDoc := AggregateSemanticByDocument(chunkToDoc, semanticByChunk)
 	nonSemanticFused, semanticFused := SplitBySource(keywordScores, semanticByDoc)
 
-	if query.MinScore > 0 {
-		nonSemanticFused = filterByMinScore(nonSemanticFused, query.MinScore)
-		semanticFused = filterByMinScore(semanticFused, query.MinScore)
+	minKeywordScore := resolveMinKeywordScore(query, e.config)
+	minSemanticScore := resolveMinSemanticScore(query, e.config)
+	if minKeywordScore > 0 {
+		nonSemanticFused = filterByMinScore(nonSemanticFused, minKeywordScore)
+	}
+	if minSemanticScore > 0 {
+		semanticFused = filterByMinScore(semanticFused, minSemanticScore)
 	}
 
 	totalNonSemantic := len(nonSemanticFused)
@@ -154,6 +158,30 @@ func (e *Engine) Search(ctx context.Context, query *models.SearchQuery) (*models
 		})
 	}
 	return response, nil
+}
+
+// resolveMinKeywordScore returns the effective minimum score for keyword results:
+// MinKeywordScore if set, else legacy MinScore, else config default.
+func resolveMinKeywordScore(query *models.SearchQuery, cfg *config.SearchConfig) float64 {
+	if query.MinKeywordScore > 0 {
+		return query.MinKeywordScore
+	}
+	if query.MinScore > 0 {
+		return query.MinScore
+	}
+	return cfg.DefaultMinKeywordScore
+}
+
+// resolveMinSemanticScore returns the effective minimum score for semantic results:
+// MinSemanticScore if set, else legacy MinScore, else config default.
+func resolveMinSemanticScore(query *models.SearchQuery, cfg *config.SearchConfig) float64 {
+	if query.MinSemanticScore > 0 {
+		return query.MinSemanticScore
+	}
+	if query.MinScore > 0 {
+		return query.MinScore
+	}
+	return cfg.DefaultMinSemanticScore
 }
 
 func filterByMinScore(results []*FusedResult, minScore float64) []*FusedResult {

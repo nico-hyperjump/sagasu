@@ -59,14 +59,16 @@ type EmbeddingConfig struct {
 
 // SearchConfig holds search and chunking settings.
 type SearchConfig struct {
-	DefaultLimit           int     `yaml:"default_limit"`
-	MaxLimit               int     `yaml:"max_limit"`
-	DefaultKeywordEnabled  bool    `yaml:"default_keyword_enabled"`
-	DefaultSemanticEnabled bool    `yaml:"default_semantic_enabled"`
-	ChunkSize              int     `yaml:"chunk_size"`
-	ChunkOverlap           int     `yaml:"chunk_overlap"`
-	TopKCandidates         int     `yaml:"top_k_candidates"`
-	KeywordTitleBoost      float64 `yaml:"keyword_title_boost"`
+	DefaultLimit               int     `yaml:"default_limit"`
+	MaxLimit                   int     `yaml:"max_limit"`
+	DefaultKeywordEnabled      bool    `yaml:"default_keyword_enabled"`
+	DefaultSemanticEnabled     bool    `yaml:"default_semantic_enabled"`
+	DefaultMinKeywordScore     float64 `yaml:"default_min_keyword_score"`
+	DefaultMinSemanticScore    float64 `yaml:"default_min_semantic_score"`
+	ChunkSize                  int     `yaml:"chunk_size"`
+	ChunkOverlap               int     `yaml:"chunk_overlap"`
+	TopKCandidates             int     `yaml:"top_k_candidates"`
+	KeywordTitleBoost          float64 `yaml:"keyword_title_boost"`
 }
 
 // Load reads and parses the config file at path, expands paths, and applies defaults.
