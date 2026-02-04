@@ -23,6 +23,12 @@ type KeywordIndex interface {
 	Search(ctx context.Context, query string, limit int, opts *SearchOptions) ([]*KeywordResult, error)
 	Delete(ctx context.Context, id string) error
 	Close() error
+	// DocCount returns the total number of documents in the index.
+	DocCount() (uint64, error)
+	// GetTermDocFrequency returns the number of documents containing the term.
+	GetTermDocFrequency(term string) (int, error)
+	// GetCorpusStats returns total doc count and doc frequencies for terms.
+	GetCorpusStats(terms []string) (totalDocs int, docFreqs map[string]int, err error)
 }
 
 // KeywordResult is a single keyword search hit.

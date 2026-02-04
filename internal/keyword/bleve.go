@@ -292,3 +292,47 @@ func (b *BleveIndex) Delete(ctx context.Context, id string) error {
 func (b *BleveIndex) Close() error {
 	return b.index.Close()
 }
+
+// DocCount returns the total number of documents in the index.
+func (b *BleveIndex) DocCount() (uint64, error) {
+	return b.index.DocCount()
+}
+
+// GetTermDocFrequency returns the number of documents containing the given term.
+// This is useful for IDF (Inverse Document Frequency) calculation.
+func (b *BleveIndex) GetTermDocFrequency(term string) (int, error) {
+	// Search for the term and count unique documents
+	q := bleve.NewMatchQuery(term)
+	req := bleve.NewSearchRequest(q)
+	req.Size = 10000 // Get all matching docs for accurate count
+	results, err := b.index.Search(req)
+	if err != nil {
+		return 0, fmt.Errorf("failed to search for term frequency: %w", err)
+	}
+	return int(results.Total), nil
+}
+
+// GetCorpusStats returns corpus-level statistics for a set of terms.
+// Returns total document count and document frequencies for each term.
+func (b *BleveIndex) GetCorpusStats(terms []string) (totalDocs int, docFreqs map[string]int, err error) {
+	// Get total document count
+	count, err := b.DocCount()
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to get doc count: %w", err)
+	}
+	totalDocs = int(count)
+
+	// Get document frequency for each term
+	docFreqs = make(map[string]int, len(terms))
+	for _, term := range terms {
+		freq, err := b.GetTermDocFrequency(term)
+		if err != nil {
+			// Log error but continue with other terms
+			docFreqs[term] = 0
+			continue
+		}
+		docFreqs[term] = freq
+	}
+
+	return totalDocs, docFreqs, nil
+}

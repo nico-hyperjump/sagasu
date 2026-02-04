@@ -4,6 +4,7 @@ package search
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -11,17 +12,20 @@ import (
 	"github.com/hyperjump/sagasu/internal/embedding"
 	"github.com/hyperjump/sagasu/internal/keyword"
 	"github.com/hyperjump/sagasu/internal/models"
+	"github.com/hyperjump/sagasu/internal/ranking"
 	"github.com/hyperjump/sagasu/internal/storage"
 	"github.com/hyperjump/sagasu/internal/vector"
 )
 
 // Engine runs hybrid (keyword + semantic) search.
 type Engine struct {
-	storage      storage.Storage
-	embedder     embedding.Embedder
-	vectorIndex  vector.VectorIndex
-	keywordIndex keyword.KeywordIndex
-	config       *config.SearchConfig
+	storage       storage.Storage
+	embedder      embedding.Embedder
+	vectorIndex   vector.VectorIndex
+	keywordIndex  keyword.KeywordIndex
+	config        *config.SearchConfig
+	ranker        *ranking.Ranker
+	rankingConfig *config.RankingConfig
 }
 
 // NewEngine creates a search engine with the given dependencies.
@@ -39,6 +43,76 @@ func NewEngine(
 		keywordIndex: keywordIndex,
 		config:       cfg,
 	}
+}
+
+// WithRanking enables content-aware ranking with the given configuration.
+func (e *Engine) WithRanking(cfg *config.RankingConfig) *Engine {
+	e.rankingConfig = cfg
+	if cfg != nil {
+		e.ranker = ranking.NewRanker(configToRankingConfig(cfg))
+	}
+	return e
+}
+
+// configToRankingConfig converts config.RankingConfig to ranking.RankingConfig.
+func configToRankingConfig(cfg *config.RankingConfig) *ranking.RankingConfig {
+	if cfg == nil {
+		return nil
+	}
+	return &ranking.RankingConfig{
+		FilenameWeight:          cfg.FilenameWeight,
+		ContentWeight:           cfg.ContentWeight,
+		PathWeight:              cfg.PathWeight,
+		MetadataWeight:          cfg.MetadataWeight,
+		ExactFilenameScore:      cfg.ExactFilenameScore,
+		AllWordsInOrderScore:    cfg.AllWordsInOrderScore,
+		AllWordsAnyOrderScore:   cfg.AllWordsAnyOrderScore,
+		SubstringMatchScore:     cfg.SubstringMatchScore,
+		PrefixMatchScore:        cfg.PrefixMatchScore,
+		MultipleOccurrenceBonus: cfg.MultipleOccurrenceBonus,
+		ExtensionMatchScore:     cfg.ExtensionMatchScore,
+		PhraseMatchScore:        cfg.PhraseMatchScore,
+		HeaderMatchScore:        cfg.HeaderMatchScore,
+		AllWordsContentScore:    cfg.AllWordsContentScore,
+		ScatteredWordsScore:     cfg.ScatteredWordsScore,
+		StemmingMatchScore:      cfg.StemmingMatchScore,
+		PathExactMatchScore:     cfg.PathExactMatchScore,
+		PathPartialMatchScore:   cfg.PathPartialMatchScore,
+		PathComponentBonus:      cfg.PathComponentBonus,
+		AuthorMatchScore:        cfg.AuthorMatchScore,
+		TagMatchScore:           cfg.TagMatchScore,
+		OtherMetadataScore:      cfg.OtherMetadataScore,
+		MaxTFIDFMultiplier:      cfg.MaxTFIDFMultiplier,
+		TFIDFEnabled:            cfg.TFIDFEnabled,
+		PositionBoostEnabled:    cfg.PositionBoostEnabled,
+		PositionBoostThreshold:  cfg.PositionBoostThreshold,
+		PositionBoostMultiplier: cfg.PositionBoostMultiplier,
+		RecencyEnabled:          cfg.RecencyEnabled,
+		Recency24hMultiplier:    cfg.Recency24hMultiplier,
+		RecencyWeekMultiplier:   cfg.RecencyWeekMultiplier,
+		RecencyMonthMultiplier:  cfg.RecencyMonthMultiplier,
+		QueryQualityEnabled:     cfg.QueryQualityEnabled,
+		PhraseMatchMultiplier:   cfg.PhraseMatchMultiplier,
+		AllWordsMultiplier:      cfg.AllWordsMultiplier,
+		PartialMatchMultiplier:  cfg.PartialMatchMultiplier,
+		FileSizeNormEnabled:     cfg.FileSizeNormEnabled,
+	}
+}
+
+// UpdateCorpusStats updates the ranker's corpus statistics for IDF calculation.
+func (e *Engine) UpdateCorpusStats(ctx context.Context) error {
+	if e.ranker == nil {
+		return nil
+	}
+
+	// Get all documents for corpus stats
+	docs, err := e.storage.ListDocuments(ctx, 0, 10000) // Get up to 10k docs for stats
+	if err != nil {
+		return fmt.Errorf("failed to list documents for corpus stats: %w", err)
+	}
+
+	e.ranker.UpdateCorpusStats(docs)
+	return nil
 }
 
 // Search runs hybrid search and returns document-level results.
@@ -134,33 +208,76 @@ func (e *Engine) Search(ctx context.Context, query *models.SearchQuery) (*models
 		Query:              query.Query,
 	}
 
-	for i, r := range nonSemanticPaged {
+	// Collect documents for potential re-ranking
+	var nonSemanticDocs []*models.SearchResult
+	for _, r := range nonSemanticPaged {
 		doc, err := e.storage.GetDocument(ctx, r.DocumentID)
 		if err != nil {
 			continue
 		}
-		response.NonSemanticResults = append(response.NonSemanticResults, &models.SearchResult{
+		nonSemanticDocs = append(nonSemanticDocs, &models.SearchResult{
 			Document:      doc,
 			Score:         r.Score,
 			KeywordScore:  r.KeywordScore,
 			SemanticScore: r.SemanticScore,
-			Rank:          i + 1,
 		})
 	}
-	for i, r := range semanticPaged {
+
+	var semanticDocs []*models.SearchResult
+	for _, r := range semanticPaged {
 		doc, err := e.storage.GetDocument(ctx, r.DocumentID)
 		if err != nil {
 			continue
 		}
-		response.SemanticResults = append(response.SemanticResults, &models.SearchResult{
+		semanticDocs = append(semanticDocs, &models.SearchResult{
 			Document:      doc,
 			Score:         r.Score,
 			KeywordScore:  r.KeywordScore,
 			SemanticScore: r.SemanticScore,
-			Rank:          i + 1,
 		})
 	}
+
+	// Apply content-aware re-ranking if enabled
+	if e.ranker != nil && e.config.RankingEnabled {
+		nonSemanticDocs = e.reRankResults(query.Query, nonSemanticDocs)
+		semanticDocs = e.reRankResults(query.Query, semanticDocs)
+	}
+
+	// Assign final ranks
+	for i := range nonSemanticDocs {
+		nonSemanticDocs[i].Rank = i + 1
+	}
+	for i := range semanticDocs {
+		semanticDocs[i].Rank = i + 1
+	}
+
+	response.NonSemanticResults = nonSemanticDocs
+	response.SemanticResults = semanticDocs
 	return response, nil
+}
+
+// reRankResults re-ranks search results using the content-aware ranker.
+func (e *Engine) reRankResults(queryStr string, results []*models.SearchResult) []*models.SearchResult {
+	if e.ranker == nil || len(results) == 0 {
+		return results
+	}
+
+	analyzedQuery := e.ranker.AnalyzeQuery(queryStr)
+
+	for _, result := range results {
+		if result.Document != nil {
+			// Calculate new score using the ranker
+			newScore := e.ranker.Rank(analyzedQuery, result.Document)
+			result.Score = newScore
+		}
+	}
+
+	// Sort by new scores (descending)
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Score > results[j].Score
+	})
+
+	return results
 }
 
 // resolveMinKeywordScore returns the effective minimum score for keyword results:
