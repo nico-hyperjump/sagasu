@@ -12,6 +12,8 @@ type VectorIndex interface {
 	Load(path string) error
 	Size() int
 	Close() error
+	// Type returns the index type identifier (e.g., "memory", "faiss").
+	Type() string
 }
 
 // VectorResult is a single vector search hit (ID is chunk ID for semantic index).

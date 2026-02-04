@@ -330,3 +330,8 @@ func pageResults(results []*FusedResult, offset, limit int) []*FusedResult {
 func (e *Engine) VectorIndexSize() int {
 	return e.vectorIndex.Size()
 }
+
+// VectorIndexType returns the type of vector index being used (e.g., "memory", "faiss").
+func (e *Engine) VectorIndexType() string {
+	return e.vectorIndex.Type()
+}

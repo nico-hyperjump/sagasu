@@ -84,12 +84,26 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	vectorSize := s.engine.VectorIndexSize()
+	vectorIndexType := s.engine.VectorIndexType()
 	resp := map[string]interface{}{
 		"documents":         docCount,
 		"chunks":            chunkCount,
 		"vector_index_size": vectorSize,
 	}
+
+	// Add configuration info
+	configInfo := map[string]interface{}{
+		"vector_index_type": vectorIndexType,
+	}
 	if s.watchConfig != nil {
+		configInfo["embedding_dimensions"] = s.watchConfig.Embedding.Dimensions
+		configInfo["chunk_size"] = s.watchConfig.Search.ChunkSize
+		configInfo["chunk_overlap"] = s.watchConfig.Search.ChunkOverlap
+		configInfo["ranking_enabled"] = s.watchConfig.Search.RankingEnabled
+		configInfo["database_path"] = s.watchConfig.Storage.DatabasePath
+		configInfo["bleve_index_path"] = s.watchConfig.Storage.BleveIndexPath
+		configInfo["faiss_index_path"] = s.watchConfig.Storage.FAISSIndexPath
+
 		diskBytes, err := storage.DiskUsageBytes(
 			s.watchConfig.Storage.DatabasePath,
 			s.watchConfig.Storage.BleveIndexPath,
@@ -99,6 +113,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 			resp["disk_usage_bytes"] = diskBytes
 		}
 	}
+	resp["config"] = configInfo
 	s.respondJSON(w, http.StatusOK, resp)
 }
 

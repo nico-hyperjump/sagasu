@@ -52,3 +52,8 @@ func (f *FAISSIndex) Size() int {
 func (f *FAISSIndex) Close() error {
 	return nil
 }
+
+// Type returns the index type identifier.
+func (f *FAISSIndex) Type() string {
+	return string(IndexTypeFAISS)
+}

@@ -33,6 +33,11 @@ func NewMemoryIndex(dimensions int) (*MemoryIndex, error) {
 	}, nil
 }
 
+// Type returns the index type identifier.
+func (m *MemoryIndex) Type() string {
+	return string(IndexTypeMemory)
+}
+
 // Add appends vectors with the given IDs.
 func (m *MemoryIndex) Add(ctx context.Context, ids []string, vectors [][]float32) error {
 	if len(ids) != len(vectors) {

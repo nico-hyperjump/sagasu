@@ -222,3 +222,14 @@ func TestFAISSIndex_AddEmpty(t *testing.T) {
 		t.Errorf("Size should be 0, got %d", idx.Size())
 	}
 }
+
+func TestFAISSIndex_Type(t *testing.T) {
+	idx, err := NewFAISSIndex(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer idx.Close()
+	if got := idx.Type(); got != "faiss" {
+		t.Errorf("Type() = %q, want %q", got, "faiss")
+	}
+}

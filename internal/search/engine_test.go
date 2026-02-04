@@ -160,3 +160,37 @@ func TestEngine_VectorIndexSize(t *testing.T) {
 		t.Errorf("after index: VectorIndexSize() = %d, want >= 1", got)
 	}
 }
+
+func TestEngine_VectorIndexType(t *testing.T) {
+	store, err := storage.NewSQLiteStorage(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	emb := embedding.NewMockEmbedder(4)
+	defer emb.Close()
+
+	vecIndex, err := vector.NewMemoryIndex(4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer vecIndex.Close()
+
+	kwPath := t.TempDir() + "/bleve"
+	kwIndex, err := keyword.NewBleveIndex(kwPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer kwIndex.Close()
+
+	cfg := &config.SearchConfig{
+		TopKCandidates: 20, ChunkSize: 50, ChunkOverlap: 10,
+		DefaultKeywordEnabled: true, DefaultSemanticEnabled: true,
+	}
+	engine := NewEngine(store, emb, vecIndex, kwIndex, cfg)
+
+	if got := engine.VectorIndexType(); got != "memory" {
+		t.Errorf("VectorIndexType() = %q, want %q", got, "memory")
+	}
+}

@@ -1,4 +1,4 @@
-.PHONY: all build test clean install run
+.PHONY: all build build-faiss test clean install run
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BINARY_NAME = sagasu
@@ -7,6 +7,10 @@ all: build
 
 build:
 	CGO_ENABLED=1 go build -ldflags "-s -w -X main.version=$(VERSION)" \
+		-o bin/$(BINARY_NAME) ./cmd/sagasu
+
+build-faiss:
+	CGO_ENABLED=1 go build -tags=faiss -ldflags "-s -w -X main.version=$(VERSION)" \
 		-o bin/$(BINARY_NAME) ./cmd/sagasu
 
 test:

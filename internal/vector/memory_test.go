@@ -115,3 +115,14 @@ func TestMemoryIndex_SaveEmptyPath(t *testing.T) {
 		t.Errorf("Save empty path should be no-op: %v", err)
 	}
 }
+
+func TestMemoryIndex_Type(t *testing.T) {
+	idx, err := NewMemoryIndex(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer idx.Close()
+	if got := idx.Type(); got != "memory" {
+		t.Errorf("Type() = %q, want %q", got, "memory")
+	}
+}

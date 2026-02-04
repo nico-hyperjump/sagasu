@@ -31,7 +31,7 @@ import (
 // It uses IndexFlatIP (inner product) for normalized vectors, which is equivalent
 // to cosine similarity. Suitable for production workloads with large datasets.
 type FAISSIndex struct {
-	index      *C.FaissIndex
+	index      *C.FaissIndexFlatIP
 	dimensions int
 	idToIntID  map[string]int64 // string ID -> FAISS internal int64 ID
 	intIDToID  map[int64]string // FAISS internal int64 ID -> string ID
@@ -45,8 +45,8 @@ func NewFAISSIndex(dimensions int) (*FAISSIndex, error) {
 		return nil, fmt.Errorf("dimensions must be positive")
 	}
 
-	var index *C.FaissIndex
-	ret := C.faiss_IndexFlatIP_new(&index, C.int(dimensions))
+	var index *C.FaissIndexFlatIP
+	ret := C.faiss_IndexFlatIP_new_with(&index, C.idx_t(dimensions))
 	if ret != 0 {
 		return nil, fmt.Errorf("failed to create FAISS index: %s", faissLastError())
 	}
@@ -321,4 +321,9 @@ func (f *FAISSIndex) Close() error {
 		f.index = nil
 	}
 	return nil
+}
+
+// Type returns the index type identifier.
+func (f *FAISSIndex) Type() string {
+	return string(IndexTypeFAISS)
 }

@@ -366,12 +366,25 @@ func searchViaHTTP(serverURL string, query *models.SearchQuery) (*models.SearchR
 	return &response, nil
 }
 
+// statusConfigResponse holds configuration info returned by status.
+type statusConfigResponse struct {
+	VectorIndexType     string `json:"vector_index_type"`
+	EmbeddingDimensions int    `json:"embedding_dimensions,omitempty"`
+	ChunkSize           int    `json:"chunk_size,omitempty"`
+	ChunkOverlap        int    `json:"chunk_overlap,omitempty"`
+	RankingEnabled      bool   `json:"ranking_enabled,omitempty"`
+	DatabasePath        string `json:"database_path,omitempty"`
+	BleveIndexPath      string `json:"bleve_index_path,omitempty"`
+	FAISSIndexPath      string `json:"faiss_index_path,omitempty"`
+}
+
 // statusResponse is the shape of GET /api/v1/status response.
 type statusResponse struct {
-	Documents       int64  `json:"documents"`
-	Chunks          int64  `json:"chunks"`
-	VectorIndexSize int    `json:"vector_index_size"`
-	DiskUsageBytes  *int64 `json:"disk_usage_bytes,omitempty"`
+	Documents       int64                 `json:"documents"`
+	Chunks          int64                 `json:"chunks"`
+	VectorIndexSize int                   `json:"vector_index_size"`
+	DiskUsageBytes  *int64                `json:"disk_usage_bytes,omitempty"`
+	Config          *statusConfigResponse `json:"config,omitempty"`
 }
 
 func runStatus() {
@@ -423,6 +436,16 @@ func runStatus() {
 			Documents:       docCount,
 			Chunks:          chunkCount,
 			VectorIndexSize: components.Engine.VectorIndexSize(),
+			Config: &statusConfigResponse{
+				VectorIndexType:     components.Engine.VectorIndexType(),
+				EmbeddingDimensions: cfg.Embedding.Dimensions,
+				ChunkSize:           cfg.Search.ChunkSize,
+				ChunkOverlap:        cfg.Search.ChunkOverlap,
+				RankingEnabled:      cfg.Search.RankingEnabled,
+				DatabasePath:        cfg.Storage.DatabasePath,
+				BleveIndexPath:      cfg.Storage.BleveIndexPath,
+				FAISSIndexPath:      cfg.Storage.FAISSIndexPath,
+			},
 		}
 		diskBytes, err := storage.DiskUsageBytes(cfg.Storage.DatabasePath, cfg.Storage.BleveIndexPath, cfg.Storage.FAISSIndexPath)
 		if err == nil {
@@ -444,6 +467,30 @@ func runStatus() {
 		fmt.Printf("vector_index_size:  %d   # count of vectors in semantic index\n", status.VectorIndexSize)
 		if status.DiskUsageBytes != nil {
 			fmt.Printf("disk_usage_bytes:   %d   # storage + indices on disk\n", *status.DiskUsageBytes)
+		}
+		if status.Config != nil {
+			fmt.Println()
+			fmt.Println("# configuration")
+			fmt.Printf("vector_index_type:  %s\n", status.Config.VectorIndexType)
+			if status.Config.EmbeddingDimensions > 0 {
+				fmt.Printf("embedding_dims:     %d\n", status.Config.EmbeddingDimensions)
+			}
+			if status.Config.ChunkSize > 0 {
+				fmt.Printf("chunk_size:         %d\n", status.Config.ChunkSize)
+			}
+			if status.Config.ChunkOverlap > 0 {
+				fmt.Printf("chunk_overlap:      %d\n", status.Config.ChunkOverlap)
+			}
+			fmt.Printf("ranking_enabled:    %t\n", status.Config.RankingEnabled)
+			if status.Config.DatabasePath != "" {
+				fmt.Printf("database_path:      %s\n", status.Config.DatabasePath)
+			}
+			if status.Config.BleveIndexPath != "" {
+				fmt.Printf("bleve_index_path:   %s\n", status.Config.BleveIndexPath)
+			}
+			if status.Config.FAISSIndexPath != "" {
+				fmt.Printf("faiss_index_path:   %s\n", status.Config.FAISSIndexPath)
+			}
 		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown output format %q; use text or json\n", *outputFormat)
