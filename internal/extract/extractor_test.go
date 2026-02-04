@@ -135,6 +135,23 @@ func minimalDocx(text string) []byte {
 	return buf.Bytes()
 }
 
+// minimalDocxWithContentTypes returns a .docx zip with [Content_Types].xml pointing to a custom document path.
+func minimalDocxWithContentTypes(text, docPath string) []byte {
+	var buf bytes.Buffer
+	w := zip.NewWriter(&buf)
+	// Create [Content_Types].xml pointing to custom document path
+	ct, _ := w.Create("[Content_Types].xml")
+	_, _ = ct.Write([]byte(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Override PartName="/` + docPath + `" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`))
+	// Create the document at the custom path
+	fw, _ := w.Create(docPath)
+	_, _ = fw.Write([]byte(`<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>` + text + `</w:t></w:r></w:p></w:body></w:document>`))
+	_ = w.Close()
+	return buf.Bytes()
+}
+
 func TestExtractBytes_docx(t *testing.T) {
 	e := NewExtractor()
 	content := minimalDocx("Searchable docx content")
@@ -143,6 +160,42 @@ func TestExtractBytes_docx(t *testing.T) {
 		t.Fatalf("ExtractBytes: %v", err)
 	}
 	if got != "Searchable docx content" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestExtractBytes_docxWithDocument2(t *testing.T) {
+	e := NewExtractor()
+	// Simulate a DOCX with word/document2.xml instead of word/document.xml
+	content := minimalDocxWithContentTypes("Content from document2", "word/document2.xml")
+	got, err := e.ExtractBytes(content, ".docx")
+	if err != nil {
+		t.Fatalf("ExtractBytes: %v", err)
+	}
+	if got != "Content from document2" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestExtractBytes_docxContentTypesReversedOrder(t *testing.T) {
+	e := NewExtractor()
+	// Test with ContentType attribute before PartName
+	var buf bytes.Buffer
+	w := zip.NewWriter(&buf)
+	ct, _ := w.Create("[Content_Types].xml")
+	_, _ = ct.Write([]byte(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Override ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml" PartName="/word/document3.xml"/>
+</Types>`))
+	fw, _ := w.Create("word/document3.xml")
+	_, _ = fw.Write([]byte(`<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Reversed order test</w:t></w:r></w:p></w:body></w:document>`))
+	_ = w.Close()
+
+	got, err := e.ExtractBytes(buf.Bytes(), ".docx")
+	if err != nil {
+		t.Fatalf("ExtractBytes: %v", err)
+	}
+	if got != "Reversed order test" {
 		t.Errorf("got %q", got)
 	}
 }

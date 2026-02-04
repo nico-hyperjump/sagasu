@@ -175,6 +175,118 @@ func TestWatcher_Start_createsMissingRootDirectory(t *testing.T) {
 	}
 }
 
+func TestWatcher_HandleNewDirectory_indexesFilesInNewFolder(t *testing.T) {
+	dir := t.TempDir()
+
+	var indexed []string
+	var mu sync.Mutex
+	onIndex := func(path string) {
+		mu.Lock()
+		indexed = append(indexed, path)
+		mu.Unlock()
+	}
+
+	w := NewWatcher([]string{dir}, []string{".txt", ".md"}, true, onIndex, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := w.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer w.Stop()
+
+	// Simulate copying a folder with files into the watched directory
+	newFolder := filepath.Join(dir, "new-folder")
+	if err := mkdirAll(newFolder); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create files inside the new folder
+	if err := writeFile(filepath.Join(newFolder, "doc1.txt"), "hello"); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeFile(filepath.Join(newFolder, "doc2.md"), "world"); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeFile(filepath.Join(newFolder, "ignore.xyz"), "skip"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for debounce and directory handling
+	time.Sleep(800 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	// Should have indexed the matching files (doc1.txt and doc2.md)
+	if len(indexed) < 2 {
+		t.Errorf("expected at least 2 indexed files, got %d: %v", len(indexed), indexed)
+	}
+
+	// Verify the correct files were indexed
+	txtFound, mdFound := false, false
+	for _, p := range indexed {
+		if strings.HasSuffix(p, "doc1.txt") {
+			txtFound = true
+		}
+		if strings.HasSuffix(p, "doc2.md") {
+			mdFound = true
+		}
+		if strings.HasSuffix(p, "ignore.xyz") {
+			t.Errorf("ignore.xyz should not be indexed")
+		}
+	}
+	if !txtFound || !mdFound {
+		t.Errorf("expected doc1.txt and doc2.md to be indexed, got %v", indexed)
+	}
+}
+
+func TestWatcher_HandleNewDirectory_recursiveSubfolders(t *testing.T) {
+	dir := t.TempDir()
+
+	var indexed []string
+	var mu sync.Mutex
+	onIndex := func(path string) {
+		mu.Lock()
+		indexed = append(indexed, path)
+		mu.Unlock()
+	}
+
+	w := NewWatcher([]string{dir}, []string{".txt"}, true, onIndex, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := w.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer w.Stop()
+
+	// Create a nested folder structure
+	nested := filepath.Join(dir, "level1", "level2")
+	if err := mkdirAll(nested); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeFile(filepath.Join(nested, "deep.txt"), "deep content"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for debounce and directory handling
+	time.Sleep(800 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	// Should have indexed the deep file
+	found := false
+	for _, p := range indexed {
+		if strings.HasSuffix(p, "deep.txt") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected deep.txt to be indexed, got %v", indexed)
+	}
+}
+
 func mkdirAll(path string) error {
 	return os.MkdirAll(path, 0755)
 }

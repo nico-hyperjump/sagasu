@@ -128,6 +128,12 @@ func (w *Watcher) handleEvent(ev fsnotify.Event) {
 	}
 	switch ev.Op {
 	case fsnotify.Create, fsnotify.Write:
+		// Check if it's a directory (newly created or moved in)
+		info, err := os.Stat(path)
+		if err == nil && info.IsDir() {
+			w.handleNewDirectory(path)
+			return
+		}
 		if w.matchExtension(path) {
 			w.debounceIndex(path)
 		}
@@ -139,6 +145,51 @@ func (w *Watcher) handleEvent(ev fsnotify.Event) {
 			}
 		}
 	}
+}
+
+// handleNewDirectory handles a newly created directory by adding it to the watch list
+// and indexing all files inside it.
+func (w *Watcher) handleNewDirectory(dirPath string) {
+	if w.logger != nil {
+		w.logger.Debug("watcher handling new directory", zap.String("path", dirPath))
+	}
+
+	w.mu.Lock()
+	recursive := w.recursive
+	watcher := w.watcher
+	w.mu.Unlock()
+
+	if watcher == nil {
+		return
+	}
+
+	// Add directory (and subdirectories if recursive) to watcher
+	if recursive {
+		filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				if err := watcher.Add(path); err != nil {
+					if w.logger != nil {
+						w.logger.Debug("watcher failed to add directory", zap.String("path", path), zap.Error(err))
+					}
+				} else if w.logger != nil {
+					w.logger.Debug("watcher added new directory", zap.String("path", path))
+				}
+			}
+			return nil
+		})
+	} else {
+		if err := watcher.Add(dirPath); err != nil {
+			if w.logger != nil {
+				w.logger.Debug("watcher failed to add directory", zap.String("path", dirPath), zap.Error(err))
+			}
+		}
+	}
+
+	// Index all files in the new directory
+	w.syncDirectory(dirPath)
 }
 
 func (w *Watcher) underRoot(path string) bool {
