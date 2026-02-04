@@ -124,6 +124,15 @@ go test -v ./internal/...
 
 Integration tests (under `test/integration/`) use real SQLite and Bleve and a temp directory.
 
+End-to-end tests (under `test/e2e/`) use a corpus of 100 documents and multiple query test cases to ensure that search returns the correct results. Run them with:
+
+```bash
+go test -v ./test/e2e/
+```
+
+- **TestE2E_SearchReturnsCorrectResults**: Indexes 100 documents via the indexer (no real files), runs 28+ queries, and asserts that each query returns the expected document(s) in the result set.
+- **TestE2E_FileIndexingSearch**: Writes 50 documents as real files using **all supported file types** the E2E can generate: `.txt`, `.md`, `.rst`, `.docx`, `.xlsx`, `.pptx`, `.odp`, `.ods`. Files are built with minimal valid content (see `test/e2e/fixtures.go`), indexed via `IndexDirectory` and the extractor, then the same query test cases are run to validate the full file→extract→index→search path. PDF (and .odt/.rtf, which share the DOCX extractor path) are not generated in E2E; PDF extraction is covered by `internal/extract` tests.
+
 ## Keyword search not finding text inside files (e.g. docx)
 
 If you see **0 keyword-only** results but semantic results (e.g. for a word you know is in a .docx), the Bleve index was likely created with an older binary. The index stores its mapping at creation time; you must **rebuild, remove the index, and re-index** with the current binary:
