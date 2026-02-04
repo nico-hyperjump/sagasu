@@ -93,13 +93,22 @@ func NewONNXEmbedder(modelPath string, dimensions, maxTokens, cacheSize int) (*O
 }
 
 // Embed returns the embedding for text, using cache when available.
+// Uses double-checked locking to avoid redundant computation when multiple
+// goroutines request the same embedding concurrently.
 func (e *ONNXEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
+	// First check (outside lock) - fast path for cached embeddings
 	if cached, ok := e.cache.Get(text); ok {
 		return cached, nil
 	}
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
+	// Second check (inside lock) - prevents double-compute when multiple
+	// goroutines miss the cache simultaneously for the same text
+	if cached, ok := e.cache.Get(text); ok {
+		return cached, nil
+	}
 
 	inputIDs, attentionMask, tokenTypeIDs := e.tokenizer.Tokenize(text, e.maxTokens)
 

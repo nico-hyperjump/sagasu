@@ -71,6 +71,17 @@ func ApplyDefaults(cfg *Config) {
 
 	// Apply ranking defaults
 	applyRankingDefaults(&cfg.Ranking)
+
+	// Apply vector defaults
+	applyVectorDefaults(&cfg.Vector)
+}
+
+// applyVectorDefaults sets default values for vector configuration.
+func applyVectorDefaults(cfg *VectorConfig) {
+	if cfg.IndexType == "" {
+		cfg.IndexType = "memory" // Default to in-memory index
+	}
+	// MaxVectors defaults to 0 (unlimited)
 }
 
 // applyRankingDefaults sets default values for ranking configuration.

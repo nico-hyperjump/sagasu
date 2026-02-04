@@ -19,6 +19,7 @@ type Config struct {
 	Search    SearchConfig    `yaml:"search"`
 	Watch     WatchConfig     `yaml:"watch"`
 	Ranking   RankingConfig   `yaml:"ranking"`
+	Vector    VectorConfig    `yaml:"vector"`
 }
 
 // WatchConfig holds directory watch settings.
@@ -132,6 +133,16 @@ type RankingConfig struct {
 
 	// File size normalization
 	FileSizeNormEnabled      bool    `yaml:"file_size_norm_enabled"`
+}
+
+// VectorConfig holds vector index settings.
+type VectorConfig struct {
+	// IndexType specifies the vector index implementation: "memory" (default) or "faiss".
+	// FAISS requires building with -tags=faiss and having FAISS library installed.
+	IndexType  string `yaml:"index_type"`
+	// MaxVectors is an optional limit on the number of vectors in the index.
+	// When set to 0 (default), there is no limit.
+	MaxVectors int    `yaml:"max_vectors"`
 }
 
 // Load reads and parses the config file at path, expands paths, and applies defaults.

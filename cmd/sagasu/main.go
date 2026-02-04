@@ -688,14 +688,32 @@ func initializeComponents(cfg *config.Config, logger *zap.Logger, debug bool) (*
 		embedder = onnxEmbedder
 	}
 
-	vectorIndex, err := vector.NewMemoryIndex(cfg.Embedding.Dimensions)
+	vectorIndex, err := vector.NewVectorIndex(cfg.Vector.IndexType, cfg.Embedding.Dimensions)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize vector index: %w", err)
+		// Fall back to memory index if configured type fails (e.g., FAISS not available)
+		if cfg.Vector.IndexType != "memory" && cfg.Vector.IndexType != "" {
+			if logger != nil {
+				logger.Warn("failed to create vector index, falling back to memory",
+					zap.String("requested_type", cfg.Vector.IndexType),
+					zap.Error(err))
+			}
+			vectorIndex, err = vector.NewVectorIndex("memory", cfg.Embedding.Dimensions)
+			if err != nil {
+				return nil, fmt.Errorf("failed to initialize vector index: %w", err)
+			}
+		} else {
+			return nil, fmt.Errorf("failed to initialize vector index: %w", err)
+		}
 	}
 	if cfg.Storage.FAISSIndexPath != "" {
 		if loadErr := vectorIndex.Load(cfg.Storage.FAISSIndexPath); loadErr != nil && logger != nil {
 			logger.Warn("vector index load skipped (use full sync)", zap.String("path", cfg.Storage.FAISSIndexPath), zap.Error(loadErr))
 		}
+	}
+	if logger != nil {
+		logger.Info("vector index initialized",
+			zap.String("type", cfg.Vector.IndexType),
+			zap.Bool("faiss_available", vector.IsFAISSAvailable()))
 	}
 
 	keywordIndex, err := keyword.NewBleveIndex(cfg.Storage.BleveIndexPath)

@@ -26,6 +26,14 @@ search:
   chunk_overlap: 50
   top_k_candidates: 100
 
+# Vector index configuration
+vector:
+  # Index type: "memory" (default, brute-force) or "faiss" (efficient ANN, requires -tags=faiss build)
+  # Use "memory" for small datasets (<10k documents), "faiss" for large-scale (100k+)
+  index_type: "memory"
+  # Optional limit on number of vectors (0 = unlimited)
+  max_vectors: 0
+
 # Optional: monitor directories for file changes (index on create/modify, remove from index on delete)
 watch:
   directories: []   # e.g. ["/path/to/docs", "~/notes"]

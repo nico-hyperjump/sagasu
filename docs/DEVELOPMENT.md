@@ -13,7 +13,12 @@ brew install onnxruntime
 
 Optional:
 
-- **FAISS** – for production vector index at scale (currently the app uses an in-memory index by default)
+- **FAISS** – for production vector index at scale. The app uses an in-memory index by default, which is suitable for datasets under ~10k documents. For larger datasets, FAISS provides efficient approximate nearest neighbor (ANN) search.
+
+```bash
+# macOS
+brew install faiss
+```
 
 ## Building
 
@@ -68,6 +73,43 @@ CGO_ENABLED=0 go build -o bin/sagasu ./cmd/sagasu
 ```
 
 Keyword search works; semantic search uses a mock (hash-based vectors, not real similarity).
+
+### Building with FAISS support
+
+For large-scale deployments (100k+ documents), you can enable FAISS for efficient vector search:
+
+1. **Install FAISS**
+
+   ```bash
+   # macOS
+   brew install faiss
+   ```
+
+2. **Build with FAISS tag**
+
+   ```bash
+   go build -tags=faiss -o bin/sagasu ./cmd/sagasu
+   ```
+
+3. **Configure to use FAISS**
+
+   In your `config.yaml`:
+
+   ```yaml
+   vector:
+     index_type: "faiss"  # or "memory" (default)
+   ```
+
+Without the `-tags=faiss` build flag, the app falls back to the in-memory index regardless of config.
+
+**Performance comparison** (approximate):
+
+| Index Type | 1k docs  | 10k docs | 100k docs |
+|------------|----------|----------|-----------|
+| memory     | ~0.1ms   | ~1ms     | ~10ms     |
+| faiss      | ~0.1ms   | ~0.2ms   | ~0.5ms    |
+
+Run benchmarks to measure on your hardware: `go test -bench=. -benchmem ./test/benchmark/`
 
 ## Production install from source
 
@@ -178,7 +220,7 @@ go test -bench=. -benchmem ./test/benchmark/
 - `internal/models/` – Document, query, result types
 - `internal/storage/` – SQLite persistence
 - `internal/embedding/` – Embedder interface, cache, tokenizer, ONNX (optional)
-- `internal/vector/` – Vector index interface, in-memory implementation
+- `internal/vector/` – Vector index interface, in-memory and FAISS implementations
 - `internal/keyword/` – Bleve keyword index
 - `internal/search/` – Fusion, processor, highlighter, engine
 - `internal/indexer/` – Chunker, preprocessor, indexer
