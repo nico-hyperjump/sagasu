@@ -3,8 +3,11 @@ package vector
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
 	"sort"
 	"sync"
 )
@@ -104,14 +107,107 @@ func (m *MemoryIndex) Remove(ctx context.Context, ids []string) error {
 	return nil
 }
 
-// Save is a no-op for MemoryIndex (optionally could persist to file).
+// Save persists the index to path. Directory is created if needed. Format: dimension (4), n (4),
+// then per vector: idLen (4), id bytes, vector (dimension*4 bytes).
 func (m *MemoryIndex) Save(path string) error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if path == "" {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return fmt.Errorf("create index dir: %w", err)
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("create index file: %w", err)
+	}
+	defer f.Close()
+	if err := binary.Write(f, binary.LittleEndian, uint32(m.dimensions)); err != nil {
+		return fmt.Errorf("write dimensions: %w", err)
+	}
+	n := uint32(len(m.ids))
+	if err := binary.Write(f, binary.LittleEndian, n); err != nil {
+		return fmt.Errorf("write count: %w", err)
+	}
+	for i, id := range m.ids {
+		idBytes := []byte(id)
+		if err := binary.Write(f, binary.LittleEndian, uint32(len(idBytes))); err != nil {
+			return fmt.Errorf("write id len: %w", err)
+		}
+		if _, err := f.Write(idBytes); err != nil {
+			return fmt.Errorf("write id: %w", err)
+		}
+		if _, err := f.Write(float32SliceToBytes(m.vectors[i])); err != nil {
+			return fmt.Errorf("write vector: %w", err)
+		}
+	}
 	return nil
 }
 
-// Load is a no-op for MemoryIndex.
+// Load reads the index from path and replaces the in-memory contents. Dimensions must match.
+// If the file does not exist, no error is returned and the index is unchanged.
 func (m *MemoryIndex) Load(path string) error {
+	if path == "" {
+		return nil
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("open index file: %w", err)
+	}
+	defer f.Close()
+	var dim, n uint32
+	if err := binary.Read(f, binary.LittleEndian, &dim); err != nil {
+		return fmt.Errorf("read dimensions: %w", err)
+	}
+	if int(dim) != m.dimensions {
+		return fmt.Errorf("dimension mismatch: file has %d, index expects %d", dim, m.dimensions)
+	}
+	if err := binary.Read(f, binary.LittleEndian, &n); err != nil {
+		return fmt.Errorf("read count: %w", err)
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.ids = make([]string, 0, n)
+	m.vectors = make([][]float32, 0, n)
+	buf := make([]byte, m.dimensions*4)
+	for i := uint32(0); i < n; i++ {
+		var idLen uint32
+		if err := binary.Read(f, binary.LittleEndian, &idLen); err != nil {
+			return fmt.Errorf("read id len: %w", err)
+		}
+		idBytes := make([]byte, idLen)
+		if _, err := f.Read(idBytes); err != nil {
+			return fmt.Errorf("read id: %w", err)
+		}
+		if _, err := f.Read(buf); err != nil {
+			return fmt.Errorf("read vector: %w", err)
+		}
+		m.ids = append(m.ids, string(idBytes))
+		m.vectors = append(m.vectors, bytesToFloat32Slice(buf))
+	}
 	return nil
+}
+
+func float32SliceToBytes(s []float32) []byte {
+	const size = 4
+	out := make([]byte, len(s)*size)
+	for i, v := range s {
+		binary.LittleEndian.PutUint32(out[i*size:(i+1)*size], math.Float32bits(v))
+	}
+	return out
+}
+
+func bytesToFloat32Slice(b []byte) []float32 {
+	const size = 4
+	out := make([]float32, len(b)/size)
+	for i := range out {
+		out[i] = math.Float32frombits(binary.LittleEndian.Uint32(b[i*size : (i+1)*size]))
+	}
+	return out
 }
 
 // Size returns the number of vectors in the index.

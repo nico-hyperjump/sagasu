@@ -94,7 +94,7 @@ func TestBleveIndex_SearchFindsTitle(t *testing.T) {
 	}
 }
 
-func TestBleveIndex_OpenExistingRecreatesIndex(t *testing.T) {
+func TestBleveIndex_OpenExistingReusesIndex(t *testing.T) {
 	dir := t.TempDir()
 	indexPath := filepath.Join(dir, "bleve")
 
@@ -111,7 +111,7 @@ func TestBleveIndex_OpenExistingRecreatesIndex(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
-	// Opening an existing index recreates it (empty) so the mapping is correct; caller re-indexes.
+	// Opening an existing index reuses it so keyword search works with incremental sync.
 	idx2, err := NewBleveIndex(indexPath)
 	if err != nil {
 		t.Fatalf("NewBleveIndex (open existing): %v", err)
@@ -124,8 +124,8 @@ func TestBleveIndex_OpenExistingRecreatesIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
-	if len(results) != 0 {
-		t.Errorf("after open existing, index is recreated empty; got %d results", len(results))
+	if len(results) != 1 || results[0].ID != "doc1" {
+		t.Errorf("after open existing, index should persist; got %d results", len(results))
 	}
 }
 

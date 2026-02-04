@@ -18,9 +18,9 @@ type BleveIndex struct {
 }
 
 // NewBleveIndex creates or opens a Bleve index at path.
-// If the index already exists, we always remove and recreate it so the mapping
-// (content/title searchable) is guaranteed. The caller must re-index documents
-// (e.g. server runs SyncExistingFiles after this).
+// If the path already exists, the existing index is opened and reused so that
+// keyword search works with incremental sync (unchanged files are not re-indexed).
+// If you change the index mapping in code, remove the index directory to force a full re-index.
 func NewBleveIndex(path string) (*BleveIndex, error) {
 	im := bleve.NewIndexMapping()
 
@@ -37,27 +37,18 @@ func NewBleveIndex(path string) (*BleveIndex, error) {
 	im.DefaultType = "document"
 	im.DefaultMapping = docMapping // so _default type also indexes content/title
 
-	index, err := bleve.New(path, im)
-	if err == bleve.ErrorIndexPathExists {
-		index, err = bleve.Open(path)
-		if err != nil {
-			return nil, fmt.Errorf("failed to open Bleve index: %w", err)
+	if _, err := os.Stat(path); err == nil {
+		index, openErr := bleve.Open(path)
+		if openErr != nil {
+			return nil, fmt.Errorf("failed to open Bleve index: %w", openErr)
 		}
-		// Persisted mapping cannot be changed. Recreate the index with our mapping
-		// so content/title are searchable. Caller re-indexes via SyncExistingFiles.
-		_ = index.Close()
-		if err := os.RemoveAll(path); err != nil {
-			return nil, fmt.Errorf("keyword index path %s: remove for recreate: %w", path, err)
-		}
-		index, err = bleve.New(path, im)
-		if err != nil {
-			return nil, fmt.Errorf("failed to recreate Bleve index: %w", err)
-		}
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to create/open Bleve index: %w", err)
+		return &BleveIndex{index: index}, nil
 	}
 
+	index, err := bleve.New(path, im)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Bleve index: %w", err)
+	}
 	return &BleveIndex{index: index}, nil
 }
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -128,10 +129,17 @@ func normalizeTitleForKeywordSearch(title string) string {
 	return strings.ReplaceAll(title, "_", " ")
 }
 
+const (
+	metaKeySourcePath  = "source_path"
+	metaKeySourceMtime = "source_mtime"
+	metaKeySourceSize  = "source_size"
+)
+
 // IndexFile reads a file from path and indexes it. The document ID is derived from the
 // absolute path so re-indexing updates the same document. If allowedExts is non-nil and
 // non-empty, the file's extension must be in the list (case-insensitive). Returns an error
 // if the path is not a regular file, cannot be read, or indexing fails.
+// Skips indexing if the file is already indexed with the same mtime and size (incremental sync).
 func (idx *Indexer) IndexFile(ctx context.Context, path string, allowedExts []string) error {
 	if idx.logger != nil {
 		idx.logger.Debug("indexer indexing file", zap.String("path", path))
@@ -151,17 +159,35 @@ func (idx *Indexer) IndexFile(ctx context.Context, path string, allowedExts []st
 	if !info.Mode().IsRegular() {
 		return fmt.Errorf("not a regular file: %s", absPath)
 	}
+	docID := fileid.FileDocID(absPath)
+	if skip, err := idx.shouldSkipFile(ctx, absPath, docID, info); err != nil {
+		return err
+	} else if skip {
+		// Ensure the doc is in the keyword index (repopulates if Bleve was opened empty).
+		if doc, getErr := idx.storage.GetDocument(ctx, docID); getErr == nil {
+			docForKeyword := *doc
+			docForKeyword.Title = normalizeTitleForKeywordSearch(doc.Title)
+			_ = idx.keywordIndex.Index(ctx, doc.ID, &docForKeyword)
+		}
+		if idx.logger != nil {
+			idx.logger.Debug("indexer skipping unchanged file", zap.String("path", absPath))
+		}
+		return nil
+	}
 	text, err := idx.extractContent(absPath)
 	if err != nil {
 		return fmt.Errorf("extract content: %w", err)
 	}
-	docID := fileid.FileDocID(absPath)
 	_ = idx.DeleteDocument(ctx, docID)
 	input := &models.DocumentInput{
-		ID:       docID,
-		Title:    filepath.Base(absPath),
-		Content:  text,
-		Metadata: map[string]interface{}{"source_path": absPath},
+		ID:    docID,
+		Title: filepath.Base(absPath),
+		Content: text,
+		Metadata: map[string]interface{}{
+			metaKeySourcePath:  absPath,
+			metaKeySourceMtime: strconv.FormatInt(info.ModTime().UnixNano(), 10),
+			metaKeySourceSize:  strconv.FormatInt(info.Size(), 10),
+		},
 	}
 	if err := idx.IndexDocument(ctx, input); err != nil {
 		return err
@@ -170,6 +196,47 @@ func (idx *Indexer) IndexFile(ctx context.Context, path string, allowedExts []st
 		idx.logger.Debug("indexer file indexed", zap.String("path", absPath), zap.String("doc_id", docID))
 	}
 	return nil
+}
+
+// shouldSkipFile returns true if the file is already indexed with the same mtime and size.
+func (idx *Indexer) shouldSkipFile(ctx context.Context, absPath, docID string, info os.FileInfo) (bool, error) {
+	doc, err := idx.storage.GetDocument(ctx, docID)
+	if err != nil {
+		return false, nil
+	}
+	if doc.Metadata == nil {
+		return false, nil
+	}
+	if doc.Metadata[metaKeySourcePath] != absPath {
+		return false, nil
+	}
+	wantMtime := info.ModTime().UnixNano()
+	wantSize := info.Size()
+	// Values are stored as strings to avoid JSON float64 precision loss (UnixNano exceeds 53 bits).
+	if metadataInt64(doc.Metadata, metaKeySourceMtime) != wantMtime || metadataInt64(doc.Metadata, metaKeySourceSize) != wantSize {
+		return false, nil
+	}
+	return true, nil
+}
+
+func metadataInt64(m map[string]interface{}, key string) int64 {
+	v, ok := m[key]
+	if !ok {
+		return 0
+	}
+	switch n := v.(type) {
+	case string:
+		x, _ := strconv.ParseInt(n, 10, 64)
+		return x
+	case int64:
+		return n
+	case int:
+		return int64(n)
+	case float64:
+		return int64(n)
+	default:
+		return 0
+	}
 }
 
 // IndexDirectory walks dir recursively and indexes each regular file whose extension

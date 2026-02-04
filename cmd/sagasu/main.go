@@ -172,6 +172,11 @@ func runServer() {
 	<-sigChan
 
 	logger.Info("Shutting down...")
+	if cfg.Storage.FAISSIndexPath != "" && components.VectorIndex != nil {
+		if err := components.VectorIndex.Save(cfg.Storage.FAISSIndexPath); err != nil && logger != nil {
+			logger.Warn("vector index save failed", zap.String("path", cfg.Storage.FAISSIndexPath), zap.Error(err))
+		}
+	}
 	watchCancel()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -657,6 +662,11 @@ func initializeComponents(cfg *config.Config, logger *zap.Logger, debug bool) (*
 	vectorIndex, err := vector.NewMemoryIndex(cfg.Embedding.Dimensions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize vector index: %w", err)
+	}
+	if cfg.Storage.FAISSIndexPath != "" {
+		if loadErr := vectorIndex.Load(cfg.Storage.FAISSIndexPath); loadErr != nil && logger != nil {
+			logger.Warn("vector index load skipped (use full sync)", zap.String("path", cfg.Storage.FAISSIndexPath), zap.Error(loadErr))
+		}
 	}
 
 	keywordIndex, err := keyword.NewBleveIndex(cfg.Storage.BleveIndexPath)

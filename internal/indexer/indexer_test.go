@@ -128,6 +128,60 @@ func TestIndexFile_createAndUpdate(t *testing.T) {
 	}
 }
 
+func TestIndexFile_skipUnchanged(t *testing.T) {
+	dir := t.TempDir()
+	idx, store := testIndexerWithStorage(t, dir)
+	ctx := context.Background()
+
+	fPath := filepath.Join(dir, "unchanged.txt")
+	if err := os.WriteFile(fPath, []byte("Same content."), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := idx.IndexFile(ctx, fPath, []string{".txt"}); err != nil {
+		t.Fatal(err)
+	}
+	docID := fileid.FileDocID(mustAbs(fPath))
+	doc1, err := store.GetDocument(ctx, docID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Second IndexFile with no file change should skip (incremental sync).
+	if err := idx.IndexFile(ctx, fPath, []string{".txt"}); err != nil {
+		t.Fatal(err)
+	}
+	doc2, err := store.GetDocument(ctx, docID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc2.Content != doc1.Content {
+		t.Errorf("skip unchanged should not rewrite doc: content %q vs %q", doc2.Content, doc1.Content)
+	}
+	if metadataInt64(doc2.Metadata, metaKeySourceMtime) != metadataInt64(doc1.Metadata, metaKeySourceMtime) {
+		t.Error("metadata source_mtime should be unchanged")
+	}
+}
+
+func Test_metadataInt64(t *testing.T) {
+	tests := []struct {
+		m    map[string]interface{}
+		key  string
+		want int64
+	}{
+		{map[string]interface{}{"x": int64(42)}, "x", 42},
+		{map[string]interface{}{"x": 100}, "x", 100},
+		{map[string]interface{}{"x": float64(7)}, "x", 7},
+		{map[string]interface{}{"x": "1738612383266000000"}, "x", 1738612383266000000},
+		{map[string]interface{}{"y": int64(1)}, "x", 0},
+		{nil, "x", 0},
+	}
+	for _, tt := range tests {
+		got := metadataInt64(tt.m, tt.key)
+		if got != tt.want {
+			t.Errorf("metadataInt64(%v, %q) = %d, want %d", tt.m, tt.key, got, tt.want)
+		}
+	}
+}
+
 func TestIndexFile_extensionFiltered(t *testing.T) {
 	dir := t.TempDir()
 	idx, _ := testIndexerWithStorage(t, dir)
