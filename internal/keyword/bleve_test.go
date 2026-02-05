@@ -447,3 +447,501 @@ func TestBleveIndex_Search_contentOnlyMatchNotFiltered(t *testing.T) {
 		t.Error("docContent should be in results (content-only match should not be filtered)")
 	}
 }
+
+// TestBleveIndex_Search_fuzzyMatchesTypos tests that fuzzy search finds documents
+// even when the query contains typos.
+func TestBleveIndex_Search_fuzzyMatchesTypos(t *testing.T) {
+	dir := t.TempDir()
+	indexPath := filepath.Join(dir, "bleve")
+
+	idx, err := NewBleveIndex(indexPath)
+	if err != nil {
+		t.Fatalf("NewBleveIndex: %v", err)
+	}
+	defer func() {
+		_ = idx.Close()
+	}()
+
+	ctx := context.Background()
+
+	// Index a document with "proposal" in the content
+	doc := &models.Document{
+		ID:      "doc1",
+		Title:   "Project Proposal.docx",
+		Content: "This proposal outlines the project scope and deliverables.",
+	}
+
+	if err := idx.Index(ctx, doc.ID, doc); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+
+	// Without fuzzy: searching for "propodal" (typo) should NOT find the document
+	resultsNoFuzzy, err := idx.Search(ctx, "propodal", 10, nil)
+	if err != nil {
+		t.Fatalf("Search (no fuzzy): %v", err)
+	}
+	if len(resultsNoFuzzy) != 0 {
+		t.Errorf("expected 0 results without fuzzy for typo 'propodal', got %d", len(resultsNoFuzzy))
+	}
+
+	// With fuzzy: searching for "propodal" should find "proposal"
+	resultsFuzzy, err := idx.Search(ctx, "propodal", 10, &SearchOptions{FuzzyEnabled: true, Fuzziness: 2})
+	if err != nil {
+		t.Fatalf("Search (fuzzy): %v", err)
+	}
+	if len(resultsFuzzy) == 0 {
+		t.Fatal("expected at least 1 result with fuzzy for typo 'propodal' -> 'proposal'")
+	}
+	if resultsFuzzy[0].ID != doc.ID {
+		t.Errorf("expected doc1, got %s", resultsFuzzy[0].ID)
+	}
+}
+
+// TestBleveIndex_Search_fuzzyWithTitleBoost tests fuzzy search combined with title boost.
+func TestBleveIndex_Search_fuzzyWithTitleBoost(t *testing.T) {
+	dir := t.TempDir()
+	indexPath := filepath.Join(dir, "bleve")
+
+	idx, err := NewBleveIndex(indexPath)
+	if err != nil {
+		t.Fatalf("NewBleveIndex: %v", err)
+	}
+	defer func() {
+		_ = idx.Close()
+	}()
+
+	ctx := context.Background()
+
+	// Doc A: typo-correctable term in title
+	docA := &models.Document{
+		ID:      "docA",
+		Title:   "Budget Report 2024.xlsx",
+		Content: "Financial summary for the year.",
+	}
+	// Doc B: typo-correctable term in content only
+	docB := &models.Document{
+		ID:      "docB",
+		Title:   "Meeting Notes.docx",
+		Content: "Discussed the budget for next quarter.",
+	}
+
+	if err := idx.Index(ctx, docA.ID, docA); err != nil {
+		t.Fatalf("Index docA: %v", err)
+	}
+	if err := idx.Index(ctx, docB.ID, docB); err != nil {
+		t.Fatalf("Index docB: %v", err)
+	}
+
+	// Search for "budgat" (typo for "budget") with fuzzy + title boost
+	results, err := idx.Search(ctx, "budgat", 10, &SearchOptions{
+		FuzzyEnabled: true,
+		Fuzziness:    2,
+		TitleBoost:   3.0,
+	})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+
+	if len(results) < 2 {
+		t.Fatalf("expected at least 2 results, got %d", len(results))
+	}
+
+	// Document with term in title should rank first due to title boost
+	if results[0].ID != "docA" {
+		t.Errorf("expected docA (title match with boost) to rank first, got %s", results[0].ID)
+	}
+}
+
+// TestBleveIndex_Search_fuzzyMultipleTerms tests fuzzy search with multiple query terms.
+func TestBleveIndex_Search_fuzzyMultipleTerms(t *testing.T) {
+	dir := t.TempDir()
+	indexPath := filepath.Join(dir, "bleve")
+
+	idx, err := NewBleveIndex(indexPath)
+	if err != nil {
+		t.Fatalf("NewBleveIndex: %v", err)
+	}
+	defer func() {
+		_ = idx.Close()
+	}()
+
+	ctx := context.Background()
+
+	doc := &models.Document{
+		ID:      "doc1",
+		Title:   "Machine Learning Tutorial.pdf",
+		Content: "This tutorial covers neural networks and deep learning fundamentals.",
+	}
+
+	if err := idx.Index(ctx, doc.ID, doc); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+
+	// Search for "machne lerning" (typos in both words) with fuzzy
+	results, err := idx.Search(ctx, "machne lerning", 10, &SearchOptions{
+		FuzzyEnabled: true,
+		Fuzziness:    2,
+		TitleBoost:   3.0,
+	})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+
+	if len(results) == 0 {
+		t.Fatal("expected at least 1 result with fuzzy for typos 'machne lerning' -> 'machine learning'")
+	}
+	if results[0].ID != doc.ID {
+		t.Errorf("expected doc1, got %s", results[0].ID)
+	}
+}
+
+// TestBleveIndex_Search_fuzzyFuzzinessLevel tests different fuzziness levels.
+func TestBleveIndex_Search_fuzzyFuzzinessLevel(t *testing.T) {
+	dir := t.TempDir()
+	indexPath := filepath.Join(dir, "bleve")
+
+	idx, err := NewBleveIndex(indexPath)
+	if err != nil {
+		t.Fatalf("NewBleveIndex: %v", err)
+	}
+	defer func() {
+		_ = idx.Close()
+	}()
+
+	ctx := context.Background()
+
+	doc := &models.Document{
+		ID:      "doc1",
+		Title:   "document.txt",
+		Content: "The documentation explains everything.",
+	}
+
+	if err := idx.Index(ctx, doc.ID, doc); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+
+	// "documantation" has 1 character difference from "documentation" (e->a)
+	// Fuzziness 1 should match
+	results1, err := idx.Search(ctx, "documantation", 10, &SearchOptions{
+		FuzzyEnabled: true,
+		Fuzziness:    1,
+	})
+	if err != nil {
+		t.Fatalf("Search (fuzziness 1): %v", err)
+	}
+	if len(results1) == 0 {
+		t.Error("fuzziness 1 should match 'documantation' to 'documentation' (1 edit)")
+	}
+
+	// "docamantation" has 2 character differences from "documentation" (u->a, e->a)
+	// Fuzziness 1 should NOT match
+	results2, err := idx.Search(ctx, "docamantation", 10, &SearchOptions{
+		FuzzyEnabled: true,
+		Fuzziness:    1,
+	})
+	if err != nil {
+		t.Fatalf("Search (fuzziness 1, 2 edits): %v", err)
+	}
+	if len(results2) != 0 {
+		t.Errorf("fuzziness 1 should NOT match 'docamantation' to 'documentation' (2 edits), got %d results", len(results2))
+	}
+
+	// Fuzziness 2 SHOULD match "docamantation"
+	results3, err := idx.Search(ctx, "docamantation", 10, &SearchOptions{
+		FuzzyEnabled: true,
+		Fuzziness:    2,
+	})
+	if err != nil {
+		t.Fatalf("Search (fuzziness 2): %v", err)
+	}
+	if len(results3) == 0 {
+		t.Error("fuzziness 2 should match 'docamantation' to 'documentation'")
+	}
+}
+
+// TestBleveIndex_Search_fuzzyDefaultFuzziness tests that default fuzziness is 2.
+func TestBleveIndex_Search_fuzzyDefaultFuzziness(t *testing.T) {
+	dir := t.TempDir()
+	indexPath := filepath.Join(dir, "bleve")
+
+	idx, err := NewBleveIndex(indexPath)
+	if err != nil {
+		t.Fatalf("NewBleveIndex: %v", err)
+	}
+	defer func() {
+		_ = idx.Close()
+	}()
+
+	ctx := context.Background()
+
+	doc := &models.Document{
+		ID:      "doc1",
+		Title:   "test.txt",
+		Content: "The proposal was accepted.",
+	}
+
+	if err := idx.Index(ctx, doc.ID, doc); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+
+	// FuzzyEnabled with default fuzziness (0 means use default of 2)
+	results, err := idx.Search(ctx, "propodal", 10, &SearchOptions{
+		FuzzyEnabled: true,
+		// Fuzziness not set, should default to 2
+	})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) == 0 {
+		t.Error("default fuzziness should be 2, allowing 'propodal' to match 'proposal'")
+	}
+}
+
+// TestBleveIndex_DocCount tests the DocCount method.
+func TestBleveIndex_DocCount(t *testing.T) {
+	dir := t.TempDir()
+	indexPath := filepath.Join(dir, "bleve")
+
+	idx, err := NewBleveIndex(indexPath)
+	if err != nil {
+		t.Fatalf("NewBleveIndex: %v", err)
+	}
+	defer func() {
+		_ = idx.Close()
+	}()
+
+	ctx := context.Background()
+
+	// Empty index should have 0 docs
+	count, err := idx.DocCount()
+	if err != nil {
+		t.Fatalf("DocCount: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("empty index DocCount = %d, want 0", count)
+	}
+
+	// Add a document
+	doc := &models.Document{ID: "doc1", Title: "Test", Content: "content"}
+	if err := idx.Index(ctx, doc.ID, doc); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+
+	// Should have 1 doc
+	count, err = idx.DocCount()
+	if err != nil {
+		t.Fatalf("DocCount: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("DocCount = %d, want 1", count)
+	}
+}
+
+// TestBleveIndex_GetTermDocFrequency tests the GetTermDocFrequency method.
+func TestBleveIndex_GetTermDocFrequency(t *testing.T) {
+	dir := t.TempDir()
+	indexPath := filepath.Join(dir, "bleve")
+
+	idx, err := NewBleveIndex(indexPath)
+	if err != nil {
+		t.Fatalf("NewBleveIndex: %v", err)
+	}
+	defer func() {
+		_ = idx.Close()
+	}()
+
+	ctx := context.Background()
+
+	// Index two documents with "machine" and one with "learning"
+	doc1 := &models.Document{ID: "doc1", Title: "T1", Content: "machine learning algorithms"}
+	doc2 := &models.Document{ID: "doc2", Title: "T2", Content: "machine vision systems"}
+	if err := idx.Index(ctx, doc1.ID, doc1); err != nil {
+		t.Fatalf("Index doc1: %v", err)
+	}
+	if err := idx.Index(ctx, doc2.ID, doc2); err != nil {
+		t.Fatalf("Index doc2: %v", err)
+	}
+
+	// "machine" should appear in 2 documents
+	freq, err := idx.GetTermDocFrequency("machine")
+	if err != nil {
+		t.Fatalf("GetTermDocFrequency: %v", err)
+	}
+	if freq != 2 {
+		t.Errorf("GetTermDocFrequency('machine') = %d, want 2", freq)
+	}
+
+	// "learning" should appear in 1 document
+	freq, err = idx.GetTermDocFrequency("learning")
+	if err != nil {
+		t.Fatalf("GetTermDocFrequency: %v", err)
+	}
+	if freq != 1 {
+		t.Errorf("GetTermDocFrequency('learning') = %d, want 1", freq)
+	}
+
+	// "xyz" should appear in 0 documents
+	freq, err = idx.GetTermDocFrequency("xyz")
+	if err != nil {
+		t.Fatalf("GetTermDocFrequency: %v", err)
+	}
+	if freq != 0 {
+		t.Errorf("GetTermDocFrequency('xyz') = %d, want 0", freq)
+	}
+}
+
+// TestBleveIndex_GetCorpusStats tests the GetCorpusStats method.
+func TestBleveIndex_GetCorpusStats(t *testing.T) {
+	dir := t.TempDir()
+	indexPath := filepath.Join(dir, "bleve")
+
+	idx, err := NewBleveIndex(indexPath)
+	if err != nil {
+		t.Fatalf("NewBleveIndex: %v", err)
+	}
+	defer func() {
+		_ = idx.Close()
+	}()
+
+	ctx := context.Background()
+
+	// Index documents
+	doc1 := &models.Document{ID: "doc1", Title: "T1", Content: "machine learning"}
+	doc2 := &models.Document{ID: "doc2", Title: "T2", Content: "machine vision"}
+	if err := idx.Index(ctx, doc1.ID, doc1); err != nil {
+		t.Fatalf("Index doc1: %v", err)
+	}
+	if err := idx.Index(ctx, doc2.ID, doc2); err != nil {
+		t.Fatalf("Index doc2: %v", err)
+	}
+
+	totalDocs, docFreqs, err := idx.GetCorpusStats([]string{"machine", "learning", "xyz"})
+	if err != nil {
+		t.Fatalf("GetCorpusStats: %v", err)
+	}
+
+	if totalDocs != 2 {
+		t.Errorf("totalDocs = %d, want 2", totalDocs)
+	}
+	if docFreqs["machine"] != 2 {
+		t.Errorf("docFreqs['machine'] = %d, want 2", docFreqs["machine"])
+	}
+	if docFreqs["learning"] != 1 {
+		t.Errorf("docFreqs['learning'] = %d, want 1", docFreqs["learning"])
+	}
+	if docFreqs["xyz"] != 0 {
+		t.Errorf("docFreqs['xyz'] = %d, want 0", docFreqs["xyz"])
+	}
+}
+
+// TestBleveIndex_GetAllTerms tests the GetAllTerms method.
+func TestBleveIndex_GetAllTerms(t *testing.T) {
+	dir := t.TempDir()
+	indexPath := filepath.Join(dir, "bleve")
+
+	idx, err := NewBleveIndex(indexPath)
+	if err != nil {
+		t.Fatalf("NewBleveIndex: %v", err)
+	}
+	defer func() {
+		_ = idx.Close()
+	}()
+
+	ctx := context.Background()
+
+	// Index a document
+	doc := &models.Document{ID: "doc1", Title: "Hello World", Content: "machine learning algorithms"}
+	if err := idx.Index(ctx, doc.ID, doc); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+
+	terms, err := idx.GetAllTerms()
+	if err != nil {
+		t.Fatalf("GetAllTerms: %v", err)
+	}
+
+	// Should contain terms from both title and content
+	termSet := make(map[string]bool)
+	for _, term := range terms {
+		termSet[term] = true
+	}
+
+	// Check for expected terms (lowercase due to standard analyzer)
+	expectedTerms := []string{"hello", "world", "machine", "learning", "algorithms"}
+	for _, expected := range expectedTerms {
+		if !termSet[expected] {
+			t.Errorf("expected term %q in GetAllTerms result", expected)
+		}
+	}
+}
+
+// TestBleveIndex_ContainsTerm tests the ContainsTerm method.
+func TestBleveIndex_ContainsTerm(t *testing.T) {
+	dir := t.TempDir()
+	indexPath := filepath.Join(dir, "bleve")
+
+	idx, err := NewBleveIndex(indexPath)
+	if err != nil {
+		t.Fatalf("NewBleveIndex: %v", err)
+	}
+	defer func() {
+		_ = idx.Close()
+	}()
+
+	ctx := context.Background()
+
+	// Index a document
+	doc := &models.Document{ID: "doc1", Title: "Test", Content: "machine learning"}
+	if err := idx.Index(ctx, doc.ID, doc); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+
+	// Should contain "machine"
+	contains, err := idx.ContainsTerm("machine")
+	if err != nil {
+		t.Fatalf("ContainsTerm: %v", err)
+	}
+	if !contains {
+		t.Error("ContainsTerm('machine') should be true")
+	}
+
+	// Should not contain "xyz"
+	contains, err = idx.ContainsTerm("xyz")
+	if err != nil {
+		t.Fatalf("ContainsTerm: %v", err)
+	}
+	if contains {
+		t.Error("ContainsTerm('xyz') should be false")
+	}
+}
+
+// TestBleveIndex_GetTermFrequency tests the GetTermFrequency method (alias).
+func TestBleveIndex_GetTermFrequency(t *testing.T) {
+	dir := t.TempDir()
+	indexPath := filepath.Join(dir, "bleve")
+
+	idx, err := NewBleveIndex(indexPath)
+	if err != nil {
+		t.Fatalf("NewBleveIndex: %v", err)
+	}
+	defer func() {
+		_ = idx.Close()
+	}()
+
+	ctx := context.Background()
+
+	// Index a document
+	doc := &models.Document{ID: "doc1", Title: "Test", Content: "machine learning"}
+	if err := idx.Index(ctx, doc.ID, doc); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+
+	// GetTermFrequency should work the same as GetTermDocFrequency
+	freq, err := idx.GetTermFrequency("machine")
+	if err != nil {
+		t.Fatalf("GetTermFrequency: %v", err)
+	}
+	if freq != 1 {
+		t.Errorf("GetTermFrequency('machine') = %d, want 1", freq)
+	}
+}

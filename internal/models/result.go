@@ -21,4 +21,11 @@ type SearchResponse struct {
 	TotalSemantic    int             `json:"total_semantic"`
 	QueryTime        int64           `json:"query_time_ms"`
 	Query            string          `json:"query"`
+	// Suggestions contains "Did you mean?" spelling suggestions when typos are detected.
+	// Only populated when FuzzyEnabled is true and misspelled terms are found.
+	Suggestions []string `json:"suggestions,omitempty"`
+	// AutoFuzzy indicates that fuzzy search was automatically enabled because the
+	// initial exact search returned no results. This helps the user understand
+	// why results may include fuzzy matches.
+	AutoFuzzy bool `json:"auto_fuzzy,omitempty"`
 }

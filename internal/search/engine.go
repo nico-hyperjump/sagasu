@@ -26,6 +26,7 @@ type Engine struct {
 	config        *config.SearchConfig
 	ranker        *ranking.Ranker
 	rankingConfig *config.RankingConfig
+	spellChecker  *keyword.SpellChecker
 }
 
 // NewEngine creates a search engine with the given dependencies.
@@ -52,6 +53,29 @@ func (e *Engine) WithRanking(cfg *config.RankingConfig) *Engine {
 		e.ranker = ranking.NewRanker(configToRankingConfig(cfg))
 	}
 	return e
+}
+
+// WithSpellChecker enables spell checking for "Did you mean?" suggestions.
+// The keywordIndex must implement the TermDictionary interface.
+func (e *Engine) WithSpellChecker() *Engine {
+	// Check if keywordIndex implements TermDictionary
+	if dict, ok := e.keywordIndex.(keyword.TermDictionary); ok {
+		e.spellChecker = keyword.NewSpellChecker(dict,
+			keyword.WithMaxDistance(2),
+			keyword.WithMinFrequency(1),
+			keyword.WithMaxSuggestions(3),
+		)
+	}
+	return e
+}
+
+// RefreshSpellChecker refreshes the spell checker's term dictionary cache.
+// Call this after indexing new documents.
+func (e *Engine) RefreshSpellChecker() error {
+	if e.spellChecker != nil {
+		return e.spellChecker.RefreshCache()
+	}
+	return nil
 }
 
 // configToRankingConfig converts config.RankingConfig to ranking.RankingConfig.
@@ -134,8 +158,10 @@ func (e *Engine) Search(ctx context.Context, query *models.SearchQuery) (*models
 		go func() {
 			defer wg.Done()
 			kwOpts := &keyword.SearchOptions{
-				TitleBoost:  e.config.KeywordTitleBoost,
-				PhraseBoost: e.config.KeywordPhraseBoost,
+				TitleBoost:   e.config.KeywordTitleBoost,
+				PhraseBoost:  e.config.KeywordPhraseBoost,
+				FuzzyEnabled: query.FuzzyEnabled,
+				Fuzziness:    2, // default fuzziness level
 			}
 			results, err := e.keywordIndex.Search(ctx, query.Query, e.config.TopKCandidates, kwOpts)
 			if err != nil {
@@ -253,6 +279,15 @@ func (e *Engine) Search(ctx context.Context, query *models.SearchQuery) (*models
 
 	response.NonSemanticResults = nonSemanticDocs
 	response.SemanticResults = semanticDocs
+
+	// Add spell check suggestions if fuzzy is enabled and spell checker is available
+	if query.FuzzyEnabled && e.spellChecker != nil {
+		suggestions := e.spellChecker.GetTopSuggestions(query.Query, 3)
+		if len(suggestions) > 0 {
+			response.Suggestions = suggestions
+		}
+	}
+
 	return response, nil
 }
 

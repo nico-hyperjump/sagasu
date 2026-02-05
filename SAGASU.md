@@ -13,8 +13,9 @@ Sagasu (探す, Japanese for "to search") is a fast, local hybrid search engine 
   - [Hybrid Search Flow](#52-hybrid-search-flow)
   - [File Watching Flow](#53-file-watching-flow)
   - [Ranking System Flow](#54-ranking-system-flow)
-  - [Data Storage Flow](#55-data-storage-flow)
-  - [Embedding Generation Flow](#56-embedding-generation-flow)
+  - [Typo Tolerance Flow](#55-typo-tolerance-flow)
+  - [Data Storage Flow](#56-data-storage-flow)
+  - [Embedding Generation Flow](#57-embedding-generation-flow)
 - [Configuration Reference](#configuration-reference)
 - [Supported File Formats](#supported-file-formats)
 - [API Endpoints](#api-endpoints)
@@ -34,23 +35,24 @@ Sagasu is a **100% local, privacy-focused hybrid search engine** designed for ma
 
 ### Key Features
 
-| Feature | Description |
-|---------|-------------|
-| Fast | Sub-50ms query times for 100k documents |
-| Hybrid Search | Combines semantic (embeddings) and keyword (BM25) search |
-| Low Memory | Under 500MB for 100k documents |
-| 100% Local | No external APIs or cloud services |
-| Private | All data stays on your machine |
-| Simple | CLI and HTTP API interfaces |
-| Directory Monitoring | Watch directories for file changes; auto-index on create/modify |
-| Multiple Formats | PDF, DOCX, Excel, presentations, and plain text |
+| Feature              | Description                                                        |
+| -------------------- | ------------------------------------------------------------------ |
+| Fast                 | Sub-50ms query times for 100k documents                            |
+| Hybrid Search        | Combines semantic (embeddings) and keyword (BM25) search           |
+| Typo Tolerance       | Auto-fuzzy when no exact matches, plus "Did you mean?" suggestions |
+| Low Memory           | Under 500MB for 100k documents                                     |
+| 100% Local           | No external APIs or cloud services                                 |
+| Private              | All data stays on your machine                                     |
+| Simple               | CLI and HTTP API interfaces                                        |
+| Directory Monitoring | Watch directories for file changes; auto-index on create/modify    |
+| Multiple Formats     | PDF, DOCX, Excel, presentations, and plain text                    |
 
 ### Target Performance
 
 | Documents | Query Time | Memory Usage |
-|-----------|------------|--------------|
-| 10,000 | 10-20ms | ~100MB |
-| 100,000 | 20-50ms | ~500MB |
+| --------- | ---------- | ------------ |
+| 10,000    | 10-20ms    | ~100MB       |
+| 100,000   | 20-50ms    | ~500MB       |
 
 ---
 
@@ -114,22 +116,22 @@ flowchart TB
 
 ### Component Responsibilities
 
-| Component | Responsibility |
-|-----------|---------------|
-| CLI | Command-line interface for server, search, index, delete, watch commands |
-| HTTP Server | REST API for programmatic access |
-| Search Engine | Orchestrates hybrid search execution |
-| Score Fusion | Merges keyword and semantic results into two disjoint lists |
-| Ranker | Optional content-aware re-ranking with multi-component scoring |
-| File Extractor | Extracts text from various file formats (PDF, DOCX, Excel, etc.) |
-| Text Chunker | Splits documents into overlapping chunks for semantic indexing |
-| Document Indexer | Coordinates storage across SQLite, Bleve, and Vector index |
-| Bleve Index | Full-text keyword search using BM25 scoring |
-| Vector Index | Semantic similarity search using cosine similarity |
-| ONNX Embedder | Generates 384-dimensional embeddings using all-MiniLM-L6-v2 |
-| Embedding Cache | LRU cache to avoid re-computing embeddings |
-| SQLite | Persistent storage for documents and chunks |
-| File Watcher | Monitors directories for changes using fsnotify |
+| Component        | Responsibility                                                           |
+| ---------------- | ------------------------------------------------------------------------ |
+| CLI              | Command-line interface for server, search, index, delete, watch commands |
+| HTTP Server      | REST API for programmatic access                                         |
+| Search Engine    | Orchestrates hybrid search execution                                     |
+| Score Fusion     | Merges keyword and semantic results into two disjoint lists              |
+| Ranker           | Optional content-aware re-ranking with multi-component scoring           |
+| File Extractor   | Extracts text from various file formats (PDF, DOCX, Excel, etc.)         |
+| Text Chunker     | Splits documents into overlapping chunks for semantic indexing           |
+| Document Indexer | Coordinates storage across SQLite, Bleve, and Vector index               |
+| Bleve Index      | Full-text keyword search using BM25 scoring                              |
+| Vector Index     | Semantic similarity search using cosine similarity                       |
+| ONNX Embedder    | Generates 384-dimensional embeddings using all-MiniLM-L6-v2              |
+| Embedding Cache  | LRU cache to avoid re-computing embeddings                               |
+| SQLite           | Persistent storage for documents and chunks                              |
+| File Watcher     | Monitors directories for changes using fsnotify                          |
 
 ---
 
@@ -137,34 +139,34 @@ flowchart TB
 
 ### Core Technologies
 
-| Technology | Purpose | Package/Library |
-|------------|---------|-----------------|
-| Go 1.24+ | Primary language | With CGO for ONNX |
-| SQLite | Document storage | `github.com/mattn/go-sqlite3` |
-| Bleve | Keyword search | `github.com/blevesearch/bleve/v2` |
+| Technology   | Purpose           | Package/Library                   |
+| ------------ | ----------------- | --------------------------------- |
+| Go 1.24+     | Primary language  | With CGO for ONNX                 |
+| SQLite       | Document storage  | `github.com/mattn/go-sqlite3`     |
+| Bleve        | Keyword search    | `github.com/blevesearch/bleve/v2` |
 | ONNX Runtime | Neural embeddings | `github.com/yalue/onnxruntime_go` |
-| fsnotify | File watching | `github.com/fsnotify/fsnotify` |
-| chi | HTTP router | `github.com/go-chi/chi/v5` |
-| zap | Logging | `go.uber.org/zap` |
-| YAML | Configuration | `gopkg.in/yaml.v3` |
+| fsnotify     | File watching     | `github.com/fsnotify/fsnotify`    |
+| chi          | HTTP router       | `github.com/go-chi/chi/v5`        |
+| zap          | Logging           | `go.uber.org/zap`                 |
+| YAML         | Configuration     | `gopkg.in/yaml.v3`                |
 
 ### File Format Libraries
 
-| Format | Library |
-|--------|---------|
-| PDF | `github.com/ledongthuc/pdf` |
+| Format        | Library                       |
+| ------------- | ----------------------------- |
+| PDF           | `github.com/ledongthuc/pdf`   |
 | Excel (.xlsx) | `github.com/xuri/excelize/v2` |
-| DOCX/ODT | Built-in XML + ZIP parsing |
-| PPTX/ODP | Built-in XML + ZIP parsing |
+| DOCX/ODT      | Built-in XML + ZIP parsing    |
+| PPTX/ODP      | Built-in XML + ZIP parsing    |
 
 ### Embedding Model
 
-| Property | Value |
-|----------|-------|
-| Model | all-MiniLM-L6-v2 |
-| Size | ~80MB |
-| Dimensions | 384 |
-| Max Tokens | 256 |
+| Property   | Value            |
+| ---------- | ---------------- |
+| Model      | all-MiniLM-L6-v2 |
+| Size       | ~80MB            |
+| Dimensions | 384              |
+| Max Tokens | 256              |
 
 ---
 
@@ -193,21 +195,25 @@ internal/
 ### Module Details
 
 #### `config/`
+
 - **config.go**: Configuration struct and YAML loader
 - **defaults.go**: Default configuration values
 - Handles path expansion, validation, and environment-specific settings
 
 #### `models/`
+
 - **document.go**: `Document`, `DocumentChunk`, `DocumentInput` types
 - **query.go**: `SearchQuery` with validation
 - **result.go**: `SearchResult`, `SearchResponse` types
 
 #### `storage/`
+
 - **storage.go**: Storage interface definition
 - **sqlite.go**: SQLite implementation with WAL mode
 - **disk.go**: Disk usage calculation utilities
 
 #### `embedding/`
+
 - **embedder.go**: `Embedder` interface
 - **onnx.go**: ONNX Runtime implementation (requires CGO)
 - **mock-embedder.go**: Hash-based mock for testing/CI
@@ -215,27 +221,34 @@ internal/
 - **tokenizer.go**: Simple tokenizer for ONNX model input
 
 #### `vector/`
+
 - **index.go**: `VectorIndex` interface
 - **memory.go**: In-memory brute-force implementation
 - **similarity.go**: Cosine similarity calculation
 
 #### `keyword/`
-- **index.go**: `KeywordIndex` interface
-- **bleve.go**: Bleve implementation with smart boosting
+
+- **index.go**: `KeywordIndex` and `TermDictionary` interfaces, `SearchOptions`
+- **bleve.go**: Bleve implementation with smart boosting and fuzzy search support
+- **spell-checker.go**: Spell checking and suggestion generation using Levenshtein distance
+- **levenshtein.go**: Pure functions for computing edit distances (Levenshtein and Damerau-Levenshtein)
 
 #### `search/`
+
 - **engine.go**: Main search engine orchestration
 - **fusion.go**: Score normalization and result splitting
 - **processor.go**: Query validation and processing
 - **highlighter.go**: Result highlighting (future)
 
 #### `indexer/`
+
 - **indexer.go**: Document indexing coordinator
 - **chunker.go**: Text chunking with overlap
 - **preprocessor.go**: Text preprocessing and normalization
 - **batch.go**: Batch processing utilities
 
 #### `extract/`
+
 - **extractor.go**: Main extractor with format routing
 - **pdf.go**: PDF text extraction
 - **docx.go**: DOCX/ODT/RTF extraction
@@ -245,6 +258,7 @@ internal/
 - **plain.go**: Plain text with UTF-8 validation
 
 #### `ranking/`
+
 - **ranker.go**: Main ranker with multi-component scoring
 - **query_analyzer.go**: Query tokenization and classification
 - **filename_scorer.go**: Filename matching scorer
@@ -256,13 +270,16 @@ internal/
 - **types.go**: Shared types
 
 #### `watcher/`
+
 - **watcher.go**: Directory watcher with debouncing
 
 #### `server/`
+
 - **server.go**: HTTP server setup
 - **handlers.go**: Request handlers for all endpoints
 
 #### `cli/`
+
 - **utils.go**: CLI output formatting and helpers
 
 ---
@@ -341,25 +358,25 @@ flowchart TD
 
 #### Step-by-Step Explanation
 
-| Step | Component | Tool/Library | Description |
-|------|-----------|--------------|-------------|
-| 1 | File Input | `os.ReadFile` | Read file bytes from disk |
-| 2 | Extension Check | `filepath.Ext` | Determine file type by extension |
-| 3 | Text Extraction | Format-specific extractors | Extract plain text from binary formats |
-| 3a | PDF | `github.com/ledongthuc/pdf` | Parse PDF structure, extract text from all pages |
-| 3b | DOCX/ODT | XML parsing + ZIP | Unzip OOXML, parse `word/document.xml`, extract `<w:t>` nodes |
-| 3c | Excel | `github.com/xuri/excelize/v2` | Read all sheets, extract cell values as tab-separated text |
-| 3d | PPTX/ODP | XML parsing + ZIP | Extract text from slide XML files |
-| 3e | Plain text | UTF-8 validation | Clean and validate text encoding |
-| 4 | Preprocessing | `indexer.Preprocess()` | Normalize whitespace, remove control characters |
-| 5 | Chunking | `Chunker.Chunk()` | Split into 512-word chunks with 50-word overlap for context |
-| 6 | Tokenization | `SimpleTokenizer` | Convert text to token IDs for ONNX model |
-| 7 | Cache Check | `EmbeddingCache` | LRU cache lookup to avoid re-embedding same text |
-| 8 | Embedding | ONNX Runtime | Run all-MiniLM-L6-v2 model to generate 384-dim vectors |
-| 9 | Normalization | `NormalizeL2Slice()` | Normalize vectors to unit length for cosine similarity |
-| 10 | SQLite Storage | `go-sqlite3` | Store document metadata and chunk content |
-| 11 | Keyword Index | Bleve | Index document for BM25 keyword search |
-| 12 | Vector Index | `MemoryIndex` | Add vectors for semantic similarity search |
+| Step | Component       | Tool/Library                  | Description                                                   |
+| ---- | --------------- | ----------------------------- | ------------------------------------------------------------- |
+| 1    | File Input      | `os.ReadFile`                 | Read file bytes from disk                                     |
+| 2    | Extension Check | `filepath.Ext`                | Determine file type by extension                              |
+| 3    | Text Extraction | Format-specific extractors    | Extract plain text from binary formats                        |
+| 3a   | PDF             | `github.com/ledongthuc/pdf`   | Parse PDF structure, extract text from all pages              |
+| 3b   | DOCX/ODT        | XML parsing + ZIP             | Unzip OOXML, parse `word/document.xml`, extract `<w:t>` nodes |
+| 3c   | Excel           | `github.com/xuri/excelize/v2` | Read all sheets, extract cell values as tab-separated text    |
+| 3d   | PPTX/ODP        | XML parsing + ZIP             | Extract text from slide XML files                             |
+| 3e   | Plain text      | UTF-8 validation              | Clean and validate text encoding                              |
+| 4    | Preprocessing   | `indexer.Preprocess()`        | Normalize whitespace, remove control characters               |
+| 5    | Chunking        | `Chunker.Chunk()`             | Split into 512-word chunks with 50-word overlap for context   |
+| 6    | Tokenization    | `SimpleTokenizer`             | Convert text to token IDs for ONNX model                      |
+| 7    | Cache Check     | `EmbeddingCache`              | LRU cache lookup to avoid re-embedding same text              |
+| 8    | Embedding       | ONNX Runtime                  | Run all-MiniLM-L6-v2 model to generate 384-dim vectors        |
+| 9    | Normalization   | `NormalizeL2Slice()`          | Normalize vectors to unit length for cosine similarity        |
+| 10   | SQLite Storage  | `go-sqlite3`                  | Store document metadata and chunk content                     |
+| 11   | Keyword Index   | Bleve                         | Index document for BM25 keyword search                        |
+| 12   | Vector Index    | `MemoryIndex`                 | Add vectors for semantic similarity search                    |
 
 #### Key Code Paths
 
@@ -464,35 +481,36 @@ flowchart TD
 
 #### Step-by-Step Explanation
 
-| Step | Component | Tool/Library | Description |
-|------|-----------|--------------|-------------|
-| 1 | Query Validation | `ProcessQuery()` | Validate query, set defaults (limit, score thresholds, enable flags) |
-| 2 | Parallel Execution | Go goroutines + `sync.WaitGroup` | Run keyword and semantic search concurrently |
-| **Keyword Path** | | | |
-| 3a | Bleve Query | Bleve `MatchQuery` | Search for query terms in title and content fields |
-| 3b | Title Boost | `TitleBoost` config | Multiply title match scores (default 2.0x) |
-| 3c | Term Coverage | Per-term queries | Count how many query terms each doc matches |
-| 3d | Phrase Boost | `MatchPhraseQuery` | Boost docs with adjacent query terms (default 1.5x) |
-| 3e | Score Formula | Additive | `score = (titleScore * boost + contentScore) * coverage^2 * phraseBoost` |
-| **Semantic Path** | | | |
-| 4a | Query Embedding | ONNX + Cache | Convert query text to 384-dim vector |
-| 4b | Vector Search | `MemoryIndex.Search()` | Find top-K chunks by inner product (cosine for normalized) |
-| 4c | Chunk to Doc | SQLite lookup | Map chunk IDs to document IDs |
-| 4d | Aggregation | `AggregateSemanticByDocument()` | Take max chunk score per document |
-| **Fusion** | | | |
-| 5 | Split Results | `SplitBySource()` | Separate into keyword-matches and semantic-only (no duplicates) |
-| 6 | Filter | `filterByMinScore()` | Remove results below threshold |
-| **Re-Ranking (Optional)** | | | |
-| 7a | Query Analysis | `QueryAnalyzer` | Tokenize, extract phrases, classify query type |
-| 7b | Filename Score | `FilenameScorer` | Exact match, prefix, substring, word matches |
-| 7c | Content Score | `ContentScorer` | Phrase match, header match, TF-IDF |
-| 7d | Path Score | `PathScorer` | Path component matching |
-| 7e | Metadata Score | `MetadataScorer` | Author, tag matching |
-| 7f | Multipliers | TF-IDF, Position, Recency | Apply score multipliers based on document properties |
-| **Output** | | | |
-| 8 | Fetch Documents | SQLite | Load full document data for results |
-| 9 | Paginate | Offset + Limit | Apply pagination |
-| 10 | Response | JSON | Return `SearchResponse` with two result lists |
+| Step                      | Component              | Tool/Library                       | Description                                                              |
+| ------------------------- | ---------------------- | ---------------------------------- | ------------------------------------------------------------------------ |
+| 1                         | Query Validation       | `ProcessQuery()`                   | Validate query, set defaults (limit, score thresholds, enable flags)     |
+| 1a                        | Spell Check (if fuzzy) | `SpellChecker.GetTopSuggestions()` | Generate "Did you mean?" suggestions for misspelled terms                |
+| 2                         | Parallel Execution     | Go goroutines + `sync.WaitGroup`   | Run keyword and semantic search concurrently                             |
+| **Keyword Path**          |                        |                                    |                                                                          |
+| 3a                        | Bleve Query            | Bleve `MatchQuery` or `FuzzyQuery` | Search for query terms (with optional fuzzy matching for typos)          |
+| 3b                        | Title Boost            | `TitleBoost` config                | Multiply title match scores (default 2.0x)                               |
+| 3c                        | Term Coverage          | Per-term queries                   | Count how many query terms each doc matches                              |
+| 3d                        | Phrase Boost           | `MatchPhraseQuery`                 | Boost docs with adjacent query terms (default 1.5x)                      |
+| 3e                        | Score Formula          | Additive                           | `score = (titleScore * boost + contentScore) * coverage^2 * phraseBoost` |
+| **Semantic Path**         |                        |                                    |                                                                          |
+| 4a                        | Query Embedding        | ONNX + Cache                       | Convert query text to 384-dim vector                                     |
+| 4b                        | Vector Search          | `MemoryIndex.Search()`             | Find top-K chunks by inner product (cosine for normalized)               |
+| 4c                        | Chunk to Doc           | SQLite lookup                      | Map chunk IDs to document IDs                                            |
+| 4d                        | Aggregation            | `AggregateSemanticByDocument()`    | Take max chunk score per document                                        |
+| **Fusion**                |                        |                                    |                                                                          |
+| 5                         | Split Results          | `SplitBySource()`                  | Separate into keyword-matches and semantic-only (no duplicates)          |
+| 6                         | Filter                 | `filterByMinScore()`               | Remove results below threshold                                           |
+| **Re-Ranking (Optional)** |                        |                                    |                                                                          |
+| 7a                        | Query Analysis         | `QueryAnalyzer`                    | Tokenize, extract phrases, classify query type                           |
+| 7b                        | Filename Score         | `FilenameScorer`                   | Exact match, prefix, substring, word matches                             |
+| 7c                        | Content Score          | `ContentScorer`                    | Phrase match, header match, TF-IDF                                       |
+| 7d                        | Path Score             | `PathScorer`                       | Path component matching                                                  |
+| 7e                        | Metadata Score         | `MetadataScorer`                   | Author, tag matching                                                     |
+| 7f                        | Multipliers            | TF-IDF, Position, Recency          | Apply score multipliers based on document properties                     |
+| **Output**                |                        |                                    |                                                                          |
+| 8                         | Fetch Documents        | SQLite                             | Load full document data for results                                      |
+| 9                         | Paginate               | Offset + Limit                     | Apply pagination                                                         |
+| 10                        | Response               | JSON                               | Return `SearchResponse` with two result lists                            |
 
 #### Score Fusion Logic
 
@@ -579,25 +597,26 @@ flowchart TD
 
 #### Step-by-Step Explanation
 
-| Step | Component | Tool/Library | Description |
-|------|-----------|--------------|-------------|
-| 1 | Configuration | YAML config | Read `watch.directories`, `watch.extensions`, `watch.recursive` |
-| 2 | Watcher Creation | `github.com/fsnotify/fsnotify` | Create OS-level file system watcher |
-| 3 | Add Directories | `filepath.WalkDir` | Recursively add all directories under each root |
-| 4 | Initial Sync | `SyncExistingFiles()` | Index all existing files matching extensions |
-| 5 | Event Loop | Go channel | Listen for `watcher.Events` channel |
-| 6 | Event Handling | Switch on `fsnotify.Op` | Handle CREATE, WRITE, REMOVE events |
-| 7 | Directory Detection | `os.Stat().IsDir()` | Check if event path is a directory |
-| 8 | New Directory | `handleNewDirectory()` | Add to watch, sync files inside |
-| 9 | Extension Filter | `matchExtension()` | Only process files with allowed extensions |
-| 10 | Debouncing | `time.AfterFunc(400ms)` | Wait 400ms before indexing to batch rapid changes |
-| 11 | Cancel Timer | `timer.Stop()` | Cancel previous timer for same file if new event |
-| 12 | Index File | `Indexer.IndexFile()` | Extract, chunk, embed, store document |
-| 13 | Remove File | `Indexer.DeleteDocument()` | Remove from SQLite, Bleve, Vector index |
+| Step | Component           | Tool/Library                   | Description                                                     |
+| ---- | ------------------- | ------------------------------ | --------------------------------------------------------------- |
+| 1    | Configuration       | YAML config                    | Read `watch.directories`, `watch.extensions`, `watch.recursive` |
+| 2    | Watcher Creation    | `github.com/fsnotify/fsnotify` | Create OS-level file system watcher                             |
+| 3    | Add Directories     | `filepath.WalkDir`             | Recursively add all directories under each root                 |
+| 4    | Initial Sync        | `SyncExistingFiles()`          | Index all existing files matching extensions                    |
+| 5    | Event Loop          | Go channel                     | Listen for `watcher.Events` channel                             |
+| 6    | Event Handling      | Switch on `fsnotify.Op`        | Handle CREATE, WRITE, REMOVE events                             |
+| 7    | Directory Detection | `os.Stat().IsDir()`            | Check if event path is a directory                              |
+| 8    | New Directory       | `handleNewDirectory()`         | Add to watch, sync files inside                                 |
+| 9    | Extension Filter    | `matchExtension()`             | Only process files with allowed extensions                      |
+| 10   | Debouncing          | `time.AfterFunc(400ms)`        | Wait 400ms before indexing to batch rapid changes               |
+| 11   | Cancel Timer        | `timer.Stop()`                 | Cancel previous timer for same file if new event                |
+| 12   | Index File          | `Indexer.IndexFile()`          | Extract, chunk, embed, store document                           |
+| 13   | Remove File         | `Indexer.DeleteDocument()`     | Remove from SQLite, Bleve, Vector index                         |
 
 #### Why Debouncing?
 
 Many editors and IDEs save files in multiple write operations:
+
 - Temporary file creation
 - Write content
 - Rename/move
@@ -608,6 +627,7 @@ The 400ms debounce delay batches these rapid changes into a single index operati
 #### Incremental Sync
 
 The watcher uses **incremental sync** to avoid re-indexing unchanged files:
+
 - Each indexed file stores `source_mtime` and `source_size` in metadata
 - On startup or file event, these are compared with current file stats
 - If unchanged, the file is skipped (only keyword index is refreshed if needed)
@@ -743,11 +763,11 @@ FinalScore = BaseScore × TF-IDF × PositionBoost × Recency × QueryQuality
 #### Default Weights
 
 | Component | Weight |
-|-----------|--------|
-| Filename | 0.3 |
-| Content | 0.5 |
-| Path | 0.1 |
-| Metadata | 0.1 |
+| --------- | ------ |
+| Filename  | 0.3    |
+| Content   | 0.5    |
+| Path      | 0.1    |
+| Metadata  | 0.1    |
 
 #### Scoring Components
 
@@ -782,7 +802,134 @@ FinalScore = BaseScore × TF-IDF × PositionBoost × Recency × QueryQuality
 
 ---
 
-### 5.5 Data Storage Flow
+### 5.5 Typo Tolerance Flow
+
+The typo tolerance feature provides three capabilities:
+
+1. **Auto-fuzzy fallback** - Automatically retries with fuzzy search when exact search returns 0 results
+2. **Fuzzy matching** - Finds results despite typos using Levenshtein edit distance
+3. **Spell suggestions** - "Did you mean?" suggestions for misspelled queries
+
+```mermaid
+flowchart TD
+    subgraph Input[Query Input]
+        Query[Search Query<br/>e.g., propodal]
+    end
+
+    subgraph ExactSearch[1. Exact Search]
+        Exact[Exact MatchQuery]
+        ExactResults{Results > 0?}
+    end
+
+    subgraph AutoFuzzy[2. Auto-Fuzzy Fallback]
+        NoResults[No exact matches]
+        EnableFuzzy[Enable fuzzy<br/>automatically]
+        FuzzyRetry[Retry with<br/>FuzzyQuery]
+    end
+
+    subgraph SpellCheck[3. Spell Checking]
+        Terms[Split Query<br/>into Terms]
+        Dict[Term Dictionary<br/>from Bleve Index]
+        Check{Term in<br/>Dictionary?}
+        Lev[Levenshtein<br/>Distance]
+        Candidates[Find Similar Terms<br/>within maxDistance]
+        Freq[Score by<br/>Term Frequency]
+        Suggest[Top Suggestions]
+    end
+
+    subgraph Output[Response]
+        Results[Search Results]
+        AutoFlag[auto_fuzzy: true]
+        Suggestions[Suggestions List<br/>Did you mean: proposal?]
+    end
+
+    Query --> Exact
+    Exact --> ExactResults
+    ExactResults -->|Yes| Results
+    ExactResults -->|No| NoResults
+    NoResults --> EnableFuzzy
+    EnableFuzzy --> FuzzyRetry
+    FuzzyRetry --> Terms
+    Terms --> Dict
+    Dict --> Check
+    Check -->|No| Lev
+    Lev --> Candidates
+    Candidates --> Freq
+    Freq --> Suggest
+    Check -->|Yes| Results
+    FuzzyRetry --> Results
+    Results --> AutoFlag
+    Suggest --> Suggestions
+```
+
+#### How It Works
+
+| Component                | Description                                                                                                                             |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **Auto-Fuzzy Fallback**  | When exact search returns 0 results, automatically retries with fuzzy enabled. Response includes `auto_fuzzy: true` to indicate this.   |
+| **Fuzzy Search**         | Uses Bleve's `FuzzyQuery` to find documents even when query terms have typos. Configurable fuzziness level (Levenshtein edit distance). |
+| **Spell Checker**        | Compares query terms against the index's term dictionary to detect misspellings.                                                        |
+| **Term Dictionary**      | Extracted from Bleve's field dictionaries, contains all indexed terms with their document frequencies.                                  |
+| **Levenshtein Distance** | Algorithm measuring the minimum number of single-character edits (insertions, deletions, substitutions) between two strings.            |
+| **Suggestions**          | Ranked by score: `(1 / (distance + 1)) * frequency`. Terms with lower edit distance and higher frequency rank higher.                   |
+
+#### Configuration
+
+| Option          | Type | Default | Description                                                             |
+| --------------- | ---- | ------- | ----------------------------------------------------------------------- |
+| `fuzzy_enabled` | bool | `false` | Force fuzzy matching (auto-fuzzy happens regardless when results are 0) |
+| `fuzziness`     | int  | `2`     | Maximum Levenshtein edit distance (1-2 recommended)                     |
+
+#### Spell Checker Options
+
+| Option           | Default | Description                             |
+| ---------------- | ------- | --------------------------------------- |
+| `maxDistance`    | `2`     | Maximum edit distance for suggestions   |
+| `minFrequency`   | `1`     | Minimum term frequency to be considered |
+| `maxSuggestions` | `5`     | Maximum suggestions per misspelled term |
+
+#### Example
+
+**Query**: `"propodal"` (typo for "proposal")
+
+**CLI Output**:
+
+```
+Found 3 results in 15ms (3 keyword-only, 0 semantic-only)
+
+No exact matches found. Showing fuzzy results instead.
+
+Did you mean: proposal?
+
+--- Non-semantic (keyword) results ---
+...
+```
+
+**JSON Response**:
+
+```json
+{
+  "non_semantic_results": [...],
+  "semantic_results": [...],
+  "suggestions": ["proposal"],
+  "auto_fuzzy": true,
+  "query": "propodal"
+}
+```
+
+The auto-fuzzy feature automatically finds documents containing "proposal" despite the typo, and the suggestions field shows the corrected query.
+
+#### Key Code Paths
+
+- Auto-Fuzzy: `cmd/sagasu/main.go` → `runSearch()` (retry logic)
+- Spell Checker: `internal/keyword/spell-checker.go` → `NewSpellChecker()`, `Check()`, `GetTopSuggestions()`
+- Levenshtein: `internal/keyword/levenshtein.go` → `LevenshteinDistance()`, `DamerauLevenshteinDistance()`
+- Fuzzy Search: `internal/keyword/bleve.go` → `buildFuzzyQuery()`
+- Integration: `internal/search/engine.go` → `WithSpellChecker()`, `Search()`
+
+---
+
+### 5.6 Data Storage Flow
 
 Shows how data flows through the storage layer.
 
@@ -824,11 +971,11 @@ flowchart LR
 
 #### Storage Components
 
-| Component | Technology | Purpose | Data Stored |
-|-----------|------------|---------|-------------|
-| SQLite | `go-sqlite3` | Persistent document storage | Documents, chunks, metadata |
-| Bleve | `blevesearch/bleve/v2` | Full-text keyword search | Inverted index, term frequencies |
-| Vector Index | Custom `MemoryIndex` | Semantic similarity search | Vector embeddings, ID mappings |
+| Component    | Technology             | Purpose                     | Data Stored                      |
+| ------------ | ---------------------- | --------------------------- | -------------------------------- |
+| SQLite       | `go-sqlite3`           | Persistent document storage | Documents, chunks, metadata      |
+| Bleve        | `blevesearch/bleve/v2` | Full-text keyword search    | Inverted index, term frequencies |
+| Vector Index | Custom `MemoryIndex`   | Semantic similarity search  | Vector embeddings, ID mappings   |
 
 #### SQLite Schema
 
@@ -875,6 +1022,7 @@ docMapping.AddFieldMappingsAt("id", keywordFieldMapping)
 #### Vector Index Format
 
 The in-memory vector index persists to disk in binary format:
+
 ```
 [dimensions: 4 bytes][count: 4 bytes]
 [id_len: 4 bytes][id_bytes: variable][vector: dimensions*4 bytes]
@@ -883,7 +1031,7 @@ The in-memory vector index persists to disk in binary format:
 
 ---
 
-### 5.6 Embedding Generation Flow
+### 5.7 Embedding Generation Flow
 
 Shows how text is converted to vector embeddings.
 
@@ -946,13 +1094,13 @@ flowchart LR
 
 #### Embedding Details
 
-| Property | Value | Description |
-|----------|-------|-------------|
-| Model | all-MiniLM-L6-v2 | Sentence transformer model |
-| Dimensions | 384 | Output vector size |
-| Max Tokens | 256 | Maximum input length |
-| Cache Size | 10,000 | LRU cache capacity |
-| Normalization | L2 | Unit length vectors for cosine similarity |
+| Property      | Value            | Description                               |
+| ------------- | ---------------- | ----------------------------------------- |
+| Model         | all-MiniLM-L6-v2 | Sentence transformer model                |
+| Dimensions    | 384              | Output vector size                        |
+| Max Tokens    | 256              | Maximum input length                      |
+| Cache Size    | 10,000           | LRU cache capacity                        |
+| Normalization | L2               | Unit length vectors for cosine similarity |
 
 #### Why L2 Normalization?
 
@@ -971,6 +1119,7 @@ flowchart LR
 #### Pre-allocated Tensors
 
 For performance, ONNX tensors are pre-allocated once and reused:
+
 - `input_ids`: Token IDs
 - `attention_mask`: Which tokens are real vs padding
 - `token_type_ids`: Segment IDs (all zeros for single-segment input)
@@ -1019,8 +1168,9 @@ search:
 
 # Directory monitoring
 watch:
-  directories: []   # e.g. ["/path/to/docs", "~/notes"]
-  extensions: [".txt", ".md", ".rst", ".pdf", ".docx", ".xlsx", ".pptx", ".odp", ".ods"]
+  directories: [] # e.g. ["/path/to/docs", "~/notes"]
+  extensions:
+    [".txt", ".md", ".rst", ".pdf", ".docx", ".xlsx", ".pptx", ".odp", ".ods"]
   recursive: true
 ```
 
@@ -1028,48 +1178,48 @@ watch:
 
 #### Server
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| Option | Type   | Default       | Description              |
+| ------ | ------ | ------------- | ------------------------ |
 | `host` | string | `"localhost"` | HTTP server bind address |
-| `port` | int | `8080` | HTTP server port |
+| `port` | int    | `8080`        | HTTP server port         |
 
 #### Storage
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `database_path` | string | See above | SQLite database file path |
-| `bleve_index_path` | string | See above | Bleve index directory |
-| `faiss_index_path` | string | See above | Vector index file path |
+| Option             | Type   | Default   | Description               |
+| ------------------ | ------ | --------- | ------------------------- |
+| `database_path`    | string | See above | SQLite database file path |
+| `bleve_index_path` | string | See above | Bleve index directory     |
+| `faiss_index_path` | string | See above | Vector index file path    |
 
 #### Embedding
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `model_path` | string | See above | ONNX model file path |
-| `dimensions` | int | `384` | Embedding vector dimensions |
-| `max_tokens` | int | `256` | Maximum input tokens |
-| `use_quantization` | bool | `true` | Use quantized model (future) |
-| `cache_size` | int | `10000` | LRU cache capacity |
+| Option             | Type   | Default   | Description                  |
+| ------------------ | ------ | --------- | ---------------------------- |
+| `model_path`       | string | See above | ONNX model file path         |
+| `dimensions`       | int    | `384`     | Embedding vector dimensions  |
+| `max_tokens`       | int    | `256`     | Maximum input tokens         |
+| `use_quantization` | bool   | `true`    | Use quantized model (future) |
+| `cache_size`       | int    | `10000`   | LRU cache capacity           |
 
 #### Search
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `default_limit` | int | `10` | Default results per query |
-| `max_limit` | int | `100` | Maximum results per query |
-| `default_keyword_enabled` | bool | `true` | Enable keyword search by default |
-| `default_semantic_enabled` | bool | `true` | Enable semantic search by default |
-| `chunk_size` | int | `512` | Words per chunk |
-| `chunk_overlap` | int | `50` | Overlapping words between chunks |
-| `top_k_candidates` | int | `100` | Candidates to consider from each search |
+| Option                     | Type | Default | Description                             |
+| -------------------------- | ---- | ------- | --------------------------------------- |
+| `default_limit`            | int  | `10`    | Default results per query               |
+| `max_limit`                | int  | `100`   | Maximum results per query               |
+| `default_keyword_enabled`  | bool | `true`  | Enable keyword search by default        |
+| `default_semantic_enabled` | bool | `true`  | Enable semantic search by default       |
+| `chunk_size`               | int  | `512`   | Words per chunk                         |
+| `chunk_overlap`            | int  | `50`    | Overlapping words between chunks        |
+| `top_k_candidates`         | int  | `100`   | Candidates to consider from each search |
 
 #### Watch
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `directories` | []string | `[]` | Root directories to watch |
-| `extensions` | []string | See above | File extensions to index |
-| `recursive` | bool | `true` | Watch subdirectories |
+| Option        | Type     | Default   | Description               |
+| ------------- | -------- | --------- | ------------------------- |
+| `directories` | []string | `[]`      | Root directories to watch |
+| `extensions`  | []string | See above | File extensions to index  |
+| `recursive`   | bool     | `true`    | Watch subdirectories      |
 
 ---
 
@@ -1077,29 +1227,29 @@ watch:
 
 ### Document Formats
 
-| Extension | Format | Extractor |
-|-----------|--------|-----------|
-| `.txt` | Plain text | UTF-8 validation |
-| `.md` | Markdown | Treated as plain text |
-| `.rst` | reStructuredText | Treated as plain text |
-| `.pdf` | PDF | `github.com/ledongthuc/pdf` |
-| `.docx` | Word 2007+ | XML + ZIP parsing |
-| `.odt` | OpenDocument Text | XML + ZIP parsing |
-| `.rtf` | Rich Text Format | Shares DOCX extractor |
+| Extension | Format            | Extractor                   |
+| --------- | ----------------- | --------------------------- |
+| `.txt`    | Plain text        | UTF-8 validation            |
+| `.md`     | Markdown          | Treated as plain text       |
+| `.rst`    | reStructuredText  | Treated as plain text       |
+| `.pdf`    | PDF               | `github.com/ledongthuc/pdf` |
+| `.docx`   | Word 2007+        | XML + ZIP parsing           |
+| `.odt`    | OpenDocument Text | XML + ZIP parsing           |
+| `.rtf`    | Rich Text Format  | Shares DOCX extractor       |
 
 ### Spreadsheet Formats
 
-| Extension | Format | Extractor |
-|-----------|--------|-----------|
-| `.xlsx` | Excel 2007+ | `github.com/xuri/excelize/v2` |
-| `.ods` | OpenDocument Spreadsheet | XML + ZIP parsing |
+| Extension | Format                   | Extractor                     |
+| --------- | ------------------------ | ----------------------------- |
+| `.xlsx`   | Excel 2007+              | `github.com/xuri/excelize/v2` |
+| `.ods`    | OpenDocument Spreadsheet | XML + ZIP parsing             |
 
 ### Presentation Formats
 
-| Extension | Format | Extractor |
-|-----------|--------|-----------|
-| `.pptx` | PowerPoint 2007+ | XML + ZIP parsing |
-| `.odp` | OpenDocument Presentation | XML + ZIP parsing |
+| Extension | Format                    | Extractor         |
+| --------- | ------------------------- | ----------------- |
+| `.pptx`   | PowerPoint 2007+          | XML + ZIP parsing |
+| `.odp`    | OpenDocument Presentation | XML + ZIP parsing |
 
 ---
 
@@ -1112,6 +1262,7 @@ watch:
 Run a hybrid (keyword + semantic) search.
 
 Request:
+
 ```json
 {
   "query": "machine learning",
@@ -1119,22 +1270,48 @@ Request:
   "offset": 0,
   "keyword_enabled": true,
   "semantic_enabled": true,
+  "fuzzy_enabled": false,
   "min_keyword_score": 0.0,
   "min_semantic_score": 0.0
 }
 ```
 
+| Field                | Type   | Default  | Description                              |
+| -------------------- | ------ | -------- | ---------------------------------------- |
+| `query`              | string | required | Search query text                        |
+| `limit`              | int    | `10`     | Maximum results to return                |
+| `offset`             | int    | `0`      | Results offset for pagination            |
+| `keyword_enabled`    | bool   | `true`   | Enable keyword (BM25) search             |
+| `semantic_enabled`   | bool   | `true`   | Enable semantic (vector) search          |
+| `fuzzy_enabled`      | bool   | `false`  | Enable fuzzy matching for typo tolerance |
+| `min_keyword_score`  | float  | `0.0`    | Minimum score for keyword results        |
+| `min_semantic_score` | float  | `0.0`    | Minimum score for semantic results       |
+
 Response:
+
 ```json
 {
   "non_semantic_results": [...],
   "semantic_results": [...],
+  "suggestions": ["corrected query"],
+  "auto_fuzzy": false,
   "total_non_semantic": 5,
   "total_semantic": 3,
   "query_time_ms": 25,
   "query": "machine learning"
 }
 ```
+
+| Field                  | Type   | Description                                                                      |
+| ---------------------- | ------ | -------------------------------------------------------------------------------- |
+| `non_semantic_results` | array  | Results from keyword search (or both if matched)                                 |
+| `semantic_results`     | array  | Results from semantic search only (not in keyword results)                       |
+| `suggestions`          | array  | Spelling suggestions when fuzzy is enabled (e.g., "Did you mean...")             |
+| `auto_fuzzy`           | bool   | True if fuzzy was automatically enabled because exact search returned no results |
+| `total_non_semantic`   | int    | Total count of non-semantic results                                              |
+| `total_semantic`       | int    | Total count of semantic-only results                                             |
+| `query_time_ms`        | int    | Query execution time in milliseconds                                             |
+| `query`                | string | Original query string                                                            |
 
 ### Documents
 
@@ -1174,7 +1351,7 @@ sagasu server [--config PATH] [--debug]
 
 ### search
 
-Run a hybrid search.
+Run a hybrid search. **Fuzzy search is automatic**: if no exact matches are found, the search automatically retries with typo tolerance enabled.
 
 ```bash
 sagasu search [flags] <query>
@@ -1184,8 +1361,18 @@ sagasu search "machine learning algorithms"
 sagasu search --limit 20 "neural networks"
 sagasu search --keyword=false "meaning-based only"   # semantic-only
 sagasu search --semantic=false "exact terms"         # keyword-only
+sagasu search "propodal"                             # auto-fuzzy if no exact match
+sagasu search --fuzzy "propodal"                     # force fuzzy from the start
 sagasu search --output json "query"                  # JSON output
 ```
+
+| Flag         | Type   | Default | Description                                                     |
+| ------------ | ------ | ------- | --------------------------------------------------------------- |
+| `--limit`    | int    | `10`    | Maximum results                                                 |
+| `--keyword`  | bool   | `true`  | Enable keyword search                                           |
+| `--semantic` | bool   | `true`  | Enable semantic search                                          |
+| `--fuzzy`    | bool   | `false` | Force fuzzy from start (auto-enabled if no exact matches found) |
+| `--output`   | string | `text`  | Output format (`text` or `json`)                                |
 
 ### index
 
@@ -1234,27 +1421,27 @@ See [docs/CLI.md](docs/CLI.md) for complete CLI documentation.
 
 ### Query Performance
 
-| Documents | Query Time (approx) | Notes |
-|-----------|---------------------|-------|
-| 10,000 | 10-20ms | Parallel search execution |
-| 100,000 | 20-50ms | With ONNX + in-memory index |
-| 1,000,000 | 50-200ms | May require FAISS for scale |
+| Documents | Query Time (approx) | Notes                       |
+| --------- | ------------------- | --------------------------- |
+| 10,000    | 10-20ms             | Parallel search execution   |
+| 100,000   | 20-50ms             | With ONNX + in-memory index |
+| 1,000,000 | 50-200ms            | May require FAISS for scale |
 
 ### Memory Usage
 
-| Documents | Memory (approx) | Notes |
-|-----------|-----------------|-------|
-| 10,000 | ~100MB | Primarily vector index |
-| 100,000 | ~500MB | 384 dims × 4 bytes × chunks |
-| 1,000,000 | ~2GB | Consider FAISS for larger datasets |
+| Documents | Memory (approx) | Notes                              |
+| --------- | --------------- | ---------------------------------- |
+| 10,000    | ~100MB          | Primarily vector index             |
+| 100,000   | ~500MB          | 384 dims × 4 bytes × chunks        |
+| 1,000,000 | ~2GB            | Consider FAISS for larger datasets |
 
 ### Indexing Performance
 
-| Operation | Time (approx) | Notes |
-|-----------|---------------|-------|
-| Text file | <100ms | Primarily embedding time |
-| PDF (10 pages) | 200-500ms | OCR not included |
-| Directory (1000 files) | 2-5 min | Depends on file sizes |
+| Operation              | Time (approx) | Notes                    |
+| ---------------------- | ------------- | ------------------------ |
+| Text file              | <100ms        | Primarily embedding time |
+| PDF (10 pages)         | 200-500ms     | OCR not included         |
+| Directory (1000 files) | 2-5 min       | Depends on file sizes    |
 
 ### Optimization Tips
 

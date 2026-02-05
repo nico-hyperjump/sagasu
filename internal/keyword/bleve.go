@@ -10,6 +10,7 @@ import (
 
 	"github.com/blevesearch/bleve/v2"
 	"github.com/blevesearch/bleve/v2/analysis/analyzer/standard"
+	blevequery "github.com/blevesearch/bleve/v2/search/query"
 	"github.com/hyperjump/sagasu/internal/models"
 )
 
@@ -62,9 +63,12 @@ func (b *BleveIndex) Index(ctx context.Context, id string, doc *models.Document)
 // When opts is nil or TitleBoost <= 1, a single match over title+content is used (original behavior).
 // When opts.TitleBoost > 1, we run separate title and content queries and merge with additive scoring,
 // term coverage bonus, and phrase proximity boost for smarter multi-term ranking.
+// When opts.FuzzyEnabled is true, fuzzy matching is used for typo tolerance.
 func (b *BleveIndex) Search(ctx context.Context, query string, limit int, opts *SearchOptions) ([]*KeywordResult, error) {
 	titleBoost := 1.0
 	phraseBoost := 1.0
+	fuzzyEnabled := false
+	fuzziness := 2 // default fuzziness level
 	if opts != nil {
 		if opts.TitleBoost > 0 {
 			titleBoost = opts.TitleBoost
@@ -72,17 +76,27 @@ func (b *BleveIndex) Search(ctx context.Context, query string, limit int, opts *
 		if opts.PhraseBoost > 0 {
 			phraseBoost = opts.PhraseBoost
 		}
+		fuzzyEnabled = opts.FuzzyEnabled
+		if opts.Fuzziness > 0 {
+			fuzziness = opts.Fuzziness
+		}
 	}
 
 	if titleBoost <= 1.0 && phraseBoost <= 1.0 {
-		return b.searchSingle(ctx, query, limit)
+		return b.searchSingle(ctx, query, limit, fuzzyEnabled, fuzziness)
 	}
-	return b.searchWithBoosts(ctx, query, limit, titleBoost, phraseBoost)
+	return b.searchWithBoosts(ctx, query, limit, titleBoost, phraseBoost, fuzzyEnabled, fuzziness)
 }
 
 // searchSingle runs one MatchQuery over all fields (original behavior).
-func (b *BleveIndex) searchSingle(ctx context.Context, query string, limit int) ([]*KeywordResult, error) {
-	q := bleve.NewMatchQuery(query)
+// When fuzzyEnabled is true, uses FuzzyQuery for each term with the specified fuzziness.
+func (b *BleveIndex) searchSingle(ctx context.Context, query string, limit int, fuzzyEnabled bool, fuzziness int) ([]*KeywordResult, error) {
+	var q blevequery.Query
+	if fuzzyEnabled {
+		q = b.buildFuzzyQuery(query, fuzziness, "")
+	} else {
+		q = bleve.NewMatchQuery(query)
+	}
 	search := bleve.NewSearchRequest(q)
 	search.Size = limit
 	search.Fields = []string{"*"}
@@ -101,7 +115,8 @@ func (b *BleveIndex) searchSingle(ctx context.Context, query string, limit int) 
 // 1. Additive scoring: score = (titleScore * titleBoost) + contentScore
 // 2. Term coverage bonus: documents matching more query terms get higher scores
 // 3. Phrase proximity boost: documents with adjacent query terms get boosted
-func (b *BleveIndex) searchWithBoosts(ctx context.Context, query string, limit int, titleBoost, phraseBoost float64) ([]*KeywordResult, error) {
+// When fuzzyEnabled is true, uses FuzzyQuery for typo tolerance.
+func (b *BleveIndex) searchWithBoosts(ctx context.Context, query string, limit int, titleBoost, phraseBoost float64, fuzzyEnabled bool, fuzziness int) ([]*KeywordResult, error) {
 	// Request enough from each so merged top "limit" is correct (same doc can appear in both).
 	reqSize := limit * 2
 	if reqSize < 50 {
@@ -113,14 +128,22 @@ func (b *BleveIndex) searchWithBoosts(ctx context.Context, query string, limit i
 	numTerms := len(terms)
 
 	// Run title and content queries
-	titleQuery := bleve.NewMatchQuery(query)
-	titleQuery.SetField("title")
+	var titleQuery, contentQuery blevequery.Query
+	if fuzzyEnabled {
+		titleQuery = b.buildFuzzyQuery(query, fuzziness, "title")
+		contentQuery = b.buildFuzzyQuery(query, fuzziness, "content")
+	} else {
+		tq := bleve.NewMatchQuery(query)
+		tq.SetField("title")
+		titleQuery = tq
+		cq := bleve.NewMatchQuery(query)
+		cq.SetField("content")
+		contentQuery = cq
+	}
 	titleReq := bleve.NewSearchRequest(titleQuery)
 	titleReq.Size = reqSize
 	titleReq.Fields = []string{"*"}
 
-	contentQuery := bleve.NewMatchQuery(query)
-	contentQuery.SetField("content")
 	contentReq := bleve.NewSearchRequest(contentQuery)
 	contentReq.Size = reqSize
 	contentReq.Fields = []string{"*"}
@@ -148,7 +171,7 @@ func (b *BleveIndex) searchWithBoosts(ctx context.Context, query string, limit i
 	// Calculate term coverage: for multi-term queries, count how many terms each doc matches
 	termCoverage := make(map[string]int) // docID -> number of matched terms
 	if numTerms > 1 {
-		termCoverage = b.calculateTermCoverage(terms, reqSize)
+		termCoverage = b.calculateTermCoverage(terms, reqSize, fuzzyEnabled, fuzziness)
 	}
 
 	// Check for phrase matches if phraseBoost > 1 and query has multiple terms
@@ -230,12 +253,60 @@ func tokenizeQuery(query string) []string {
 	return terms
 }
 
+// buildFuzzyQuery creates a disjunction of FuzzyQueries for each term in the query.
+// If field is empty, searches all fields; otherwise restricts to the specified field.
+func (b *BleveIndex) buildFuzzyQuery(queryStr string, fuzziness int, field string) blevequery.Query {
+	terms := tokenizeQuery(queryStr)
+	if len(terms) == 0 {
+		// Fallback to match query for empty terms
+		mq := bleve.NewMatchQuery(queryStr)
+		if field != "" {
+			mq.SetField(field)
+		}
+		return mq
+	}
+
+	if len(terms) == 1 {
+		// Single term: use simple FuzzyQuery
+		fq := bleve.NewFuzzyQuery(terms[0])
+		fq.SetFuzziness(fuzziness)
+		if field != "" {
+			fq.SetField(field)
+		}
+		return fq
+	}
+
+	// Multiple terms: combine with BooleanQuery (should match)
+	// This mimics MatchQuery behavior where any term can match
+	queries := make([]blevequery.Query, 0, len(terms))
+	for _, term := range terms {
+		fq := bleve.NewFuzzyQuery(term)
+		fq.SetFuzziness(fuzziness)
+		if field != "" {
+			fq.SetField(field)
+		}
+		queries = append(queries, fq)
+	}
+
+	// Use DisjunctionQuery - matches if any term matches (OR semantics)
+	disjunction := bleve.NewDisjunctionQuery(queries...)
+	return disjunction
+}
+
 // calculateTermCoverage counts how many unique query terms each document matches.
-func (b *BleveIndex) calculateTermCoverage(terms []string, reqSize int) map[string]int {
+// When fuzzyEnabled is true, uses FuzzyQuery for each term.
+func (b *BleveIndex) calculateTermCoverage(terms []string, reqSize int, fuzzyEnabled bool, fuzziness int) map[string]int {
 	coverage := make(map[string]int)
 	for _, term := range terms {
-		// Run a match query for each individual term
-		q := bleve.NewMatchQuery(term)
+		// Run a match/fuzzy query for each individual term
+		var q blevequery.Query
+		if fuzzyEnabled {
+			fq := bleve.NewFuzzyQuery(term)
+			fq.SetFuzziness(fuzziness)
+			q = fq
+		} else {
+			q = bleve.NewMatchQuery(term)
+		}
 		req := bleve.NewSearchRequest(q)
 		req.Size = reqSize
 		results, err := b.index.Search(req)
@@ -335,4 +406,60 @@ func (b *BleveIndex) GetCorpusStats(terms []string) (totalDocs int, docFreqs map
 	}
 
 	return totalDocs, docFreqs, nil
+}
+
+// GetAllTerms returns all unique terms from the index dictionary.
+// This is used for spell checking to build the term dictionary.
+func (b *BleveIndex) GetAllTerms() ([]string, error) {
+	terms := make([]string, 0)
+	seen := make(map[string]struct{})
+
+	// Get terms from content field
+	contentDict, err := b.index.FieldDict("content")
+	if err == nil {
+		defer contentDict.Close()
+		for {
+			entry, err := contentDict.Next()
+			if err != nil || entry == nil {
+				break
+			}
+			if _, ok := seen[entry.Term]; !ok {
+				terms = append(terms, entry.Term)
+				seen[entry.Term] = struct{}{}
+			}
+		}
+	}
+
+	// Get terms from title field
+	titleDict, err := b.index.FieldDict("title")
+	if err == nil {
+		defer titleDict.Close()
+		for {
+			entry, err := titleDict.Next()
+			if err != nil || entry == nil {
+				break
+			}
+			if _, ok := seen[entry.Term]; !ok {
+				terms = append(terms, entry.Term)
+				seen[entry.Term] = struct{}{}
+			}
+		}
+	}
+
+	return terms, nil
+}
+
+// ContainsTerm checks if a term exists in the index.
+func (b *BleveIndex) ContainsTerm(term string) (bool, error) {
+	freq, err := b.GetTermDocFrequency(term)
+	if err != nil {
+		return false, err
+	}
+	return freq > 0, nil
+}
+
+// GetTermFrequency returns the document frequency for a term.
+// This is an alias for GetTermDocFrequency to satisfy the TermDictionary interface.
+func (b *BleveIndex) GetTermFrequency(term string) (int, error) {
+	return b.GetTermDocFrequency(term)
 }

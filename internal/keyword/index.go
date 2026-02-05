@@ -15,6 +15,12 @@ type SearchOptions struct {
 	// PhraseBoost multiplies the score when query terms appear close together (phrase match).
 	// Values > 1 boost documents with adjacent query terms (e.g. 1.5). Use 1.0 for no boost.
 	PhraseBoost float64
+	// FuzzyEnabled enables fuzzy matching for typo tolerance.
+	// When true, searches will match terms within the specified edit distance.
+	FuzzyEnabled bool
+	// Fuzziness is the maximum Levenshtein edit distance for fuzzy matching (1 or 2).
+	// Default is 2 when FuzzyEnabled is true. Higher values are more lenient.
+	Fuzziness int
 }
 
 // KeywordIndex defines keyword search operations.
@@ -35,4 +41,15 @@ type KeywordIndex interface {
 type KeywordResult struct {
 	ID    string
 	Score float64
+}
+
+// TermDictionary provides access to the term dictionary for spell checking.
+// This interface allows dependency injection for testing.
+type TermDictionary interface {
+	// GetAllTerms returns all unique terms in the index.
+	GetAllTerms() ([]string, error)
+	// GetTermFrequency returns the document frequency for a term.
+	GetTermFrequency(term string) (int, error)
+	// ContainsTerm checks if a term exists in the index.
+	ContainsTerm(term string) (bool, error)
 }

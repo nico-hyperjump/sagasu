@@ -44,6 +44,14 @@ func writeSearchResultsText(w io.Writer, response *models.SearchResponse) {
 	total := response.TotalNonSemantic + response.TotalSemantic
 	fmt.Fprintf(w, "\nFound %d results in %dms (%d keyword-only, %d semantic-only)\n\n",
 		total, response.QueryTime, response.TotalNonSemantic, response.TotalSemantic)
+	// Show auto-fuzzy notice and suggestions
+	if response.AutoFuzzy && len(response.Suggestions) > 0 {
+		fmt.Fprintf(w, "No exact matches found. Showing results for %q instead.\n\n", response.Suggestions[0])
+	} else if response.AutoFuzzy {
+		fmt.Fprintln(w, "No exact matches found. Showing fuzzy results instead.")
+	} else if len(response.Suggestions) > 0 {
+		fmt.Fprintf(w, "Did you mean: %s?\n\n", strings.Join(response.Suggestions, ", "))
+	}
 	if len(response.NonSemanticResults) > 0 {
 		fmt.Fprintln(w, "--- Non-semantic (keyword) results ---")
 		for _, result := range response.NonSemanticResults {
@@ -74,6 +82,14 @@ func writeOneResult(w io.Writer, result *models.SearchResult, source string) {
 func writeSearchResultsCompact(w io.Writer, response *models.SearchResponse) {
 	total := response.TotalNonSemantic + response.TotalSemantic
 	fmt.Fprintf(w, "Found %d results in %dms\n", total, response.QueryTime)
+	// Show auto-fuzzy notice and suggestions
+	if response.AutoFuzzy && len(response.Suggestions) > 0 {
+		fmt.Fprintf(w, "No exact matches found. Showing results for %q instead.\n", response.Suggestions[0])
+	} else if response.AutoFuzzy {
+		fmt.Fprintln(w, "No exact matches found. Showing fuzzy results instead.")
+	} else if len(response.Suggestions) > 0 {
+		fmt.Fprintf(w, "Did you mean: %s?\n", strings.Join(response.Suggestions, ", "))
+	}
 	for _, result := range response.NonSemanticResults {
 		writeOneResultCompact(w, result, "keyword")
 	}

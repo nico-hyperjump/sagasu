@@ -192,12 +192,14 @@ func printSearchUsage(fs *flag.FlagSet) {
 Results are split into two lists: keyword matches and semantic-only matches.
   • Use --keyword=false for semantic-only search.
   • Use --semantic=false for keyword-only search.
+  • Use --fuzzy to enable typo tolerance (finds results despite spelling mistakes).
   • --min-keyword-score and --min-semantic-score filter low-relevance hits; --limit controls how many per list.
 
 Examples:
   sagasu search machine learning
   sagasu search "machine learning"                 # same as above
   sagasu search --keyword=false neural networks     # semantic-only
+  sagasu search --fuzzy propodal                    # typo-tolerant search
   sagasu search --min-keyword-score 0.1 --min-semantic-score 0.2 --limit 20 your query
 `)
 }
@@ -264,6 +266,7 @@ func runSearch() {
 	minSemanticScore := fs.Float64("min-semantic-score", defaultMinSem, "minimum score for semantic-only results")
 	kwEnabled := fs.Bool("keyword", true, "enable keyword search")
 	semEnabled := fs.Bool("semantic", true, "enable semantic search")
+	fuzzyEnabled := fs.Bool("fuzzy", false, "enable fuzzy matching for typo tolerance")
 	outputFormat := fs.String("output", "text", "output format: text (human-readable), compact (one result per line), or json (parseable)")
 	fs.Usage = func() { printSearchUsage(fs) }
 	_ = fs.Parse(searchArgs)
@@ -292,12 +295,13 @@ func runSearch() {
 	}
 
 	searchQuery := &models.SearchQuery{
-		Query:             queryStr,
-		Limit:             *limit,
-		MinKeywordScore:   *minKeywordScore,
-		MinSemanticScore:  *minSemanticScore,
+		Query:            queryStr,
+		Limit:            *limit,
+		MinKeywordScore:  *minKeywordScore,
+		MinSemanticScore: *minSemanticScore,
 		KeywordEnabled:   *kwEnabled,
 		SemanticEnabled:  *semEnabled,
+		FuzzyEnabled:     *fuzzyEnabled,
 	}
 
 	if *serverURL != "" {
@@ -306,6 +310,15 @@ func runSearch() {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Search failed: %v\n", err)
 			os.Exit(1)
+		}
+		// Auto-retry with fuzzy if no results and fuzzy not already enabled
+		if !searchQuery.FuzzyEnabled && response.TotalNonSemantic == 0 && response.TotalSemantic == 0 {
+			searchQuery.FuzzyEnabled = true
+			fuzzyResponse, fuzzyErr := searchViaHTTP(*serverURL, searchQuery)
+			if fuzzyErr == nil && (fuzzyResponse.TotalNonSemantic > 0 || fuzzyResponse.TotalSemantic > 0) {
+				response = fuzzyResponse
+				response.AutoFuzzy = true
+			}
 		}
 		if err := cli.WriteSearchResults(os.Stdout, response, format); err != nil {
 			fmt.Fprintf(os.Stderr, "Output failed: %v\n", err)
@@ -338,6 +351,15 @@ func runSearch() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Search failed: %v\n", err)
 		os.Exit(1)
+	}
+	// Auto-retry with fuzzy if no results and fuzzy not already enabled
+	if !searchQuery.FuzzyEnabled && response.TotalNonSemantic == 0 && response.TotalSemantic == 0 {
+		searchQuery.FuzzyEnabled = true
+		fuzzyResponse, fuzzyErr := components.Engine.Search(context.Background(), searchQuery)
+		if fuzzyErr == nil && (fuzzyResponse.TotalNonSemantic > 0 || fuzzyResponse.TotalSemantic > 0) {
+			response = fuzzyResponse
+			response.AutoFuzzy = true
+		}
 	}
 	if err := cli.WriteSearchResults(os.Stdout, response, format); err != nil {
 		fmt.Fprintf(os.Stderr, "Output failed: %v\n", err)
@@ -769,6 +791,9 @@ func initializeComponents(cfg *config.Config, logger *zap.Logger, debug bool) (*
 	}
 
 	engine := search.NewEngine(store, embedder, vectorIndex, keywordIndex, &cfg.Search)
+	// Initialize spell checker for typo tolerance
+	engine.WithSpellChecker()
+
 	idxOpts := []indexer.IndexerOption{}
 	if debug && logger != nil {
 		idxOpts = append(idxOpts, indexer.WithLogger(logger))
@@ -810,6 +835,7 @@ Search Flags:
   --min-semantic-score float  Minimum score for semantic-only results (default from config, or 0.49)
   --keyword                   Enable keyword search (default: true)
   --semantic                  Enable semantic search (default: true)
+  --fuzzy                     Enable fuzzy matching for typo tolerance (default: false)
 
 Index Flags:
   --config string    Config file path

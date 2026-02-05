@@ -36,3 +36,38 @@ func TestSearchQuery_Validate(t *testing.T) {
 		})
 	}
 }
+
+func TestSearchQuery_FuzzyEnabled(t *testing.T) {
+	tests := []struct {
+		name         string
+		query        *SearchQuery
+		wantFuzzy    bool
+	}{
+		{
+			name:      "fuzzy disabled by default",
+			query:     &SearchQuery{Query: "test"},
+			wantFuzzy: false,
+		},
+		{
+			name:      "fuzzy enabled explicitly",
+			query:     &SearchQuery{Query: "test", FuzzyEnabled: true},
+			wantFuzzy: true,
+		},
+		{
+			name:      "fuzzy with keyword search",
+			query:     &SearchQuery{Query: "test", KeywordEnabled: true, FuzzyEnabled: true},
+			wantFuzzy: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.query.Validate()
+			if err != nil {
+				t.Fatalf("Validate() unexpected error: %v", err)
+			}
+			if tt.query.FuzzyEnabled != tt.wantFuzzy {
+				t.Errorf("FuzzyEnabled = %v, want %v", tt.query.FuzzyEnabled, tt.wantFuzzy)
+			}
+		})
+	}
+}
